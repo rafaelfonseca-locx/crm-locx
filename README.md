@@ -135,6 +135,14 @@ Testes da API:
 npm test
 ```
 
+### Esqueci a senha
+
+Volta a senha para `locx@2026` (a pessoa troca no próximo acesso). Sem e-mail, lista os usuários do banco:
+
+```bash
+npm run db:reset-password -- rafael.fonseca@locx.com.br
+```
+
 ## Importar a base atual (Handoff RE Patrimonial)
 
 Importa os leads do arquivo de handoff (o HTML com o histórico comercial) com etapa, histórico, notas, reuniões, trials, plano, temperatura e motivo de perda:

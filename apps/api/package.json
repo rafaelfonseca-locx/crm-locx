@@ -14,7 +14,8 @@
 		"db:seed": "tsx prisma/seed.ts",
 		"db:reset": "prisma migrate reset --force",
 		"db:clear": "tsx prisma/clear.ts",
-		"db:import": "tsx prisma/import-handoff.ts"
+		"db:import": "tsx prisma/import-handoff.ts",
+		"db:reset-password": "tsx prisma/reset-password.ts"
 	},
 	"prisma": {
 		"seed": "tsx prisma/seed.ts"

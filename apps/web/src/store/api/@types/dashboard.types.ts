@@ -54,6 +54,7 @@ export type RdIntegration = {
 	webhookUrl: string | null;
 	calWebhookUrl: string | null;
 	assignmentMode: "ROUND_ROBIN" | "UNASSIGNED";
+	leadConversions: string[];
 	received30d: number;
 	calBookings30d: number;
 	lastReceivedAt: string | null;
@@ -62,7 +63,7 @@ export type RdIntegration = {
 		id: string;
 		source: "rd-station" | "cal.com";
 		conversion: string | null;
-		status: "PROCESSED" | "UPDATED" | "ERROR";
+		status: "PROCESSED" | "UPDATED" | "IGNORED" | "ERROR";
 		message: string | null;
 		leadId: number | null;
 		email: string | null;

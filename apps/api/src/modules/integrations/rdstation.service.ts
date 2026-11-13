@@ -18,7 +18,28 @@ export async function getAssignmentMode(): Promise<AssignmentMode> {
 	return mode === "UNASSIGNED" ? "UNASSIGNED" : "ROUND_ROBIN";
 }
 
-type ProcessResult = { status: "PROCESSED" | "UPDATED"; leadId: number; message: string };
+type ProcessResult = { status: "PROCESSED" | "UPDATED" | "IGNORED"; leadId: number | null; message: string };
+
+export const LEAD_CONVERSIONS_KEY = "leadConversions";
+/** Formulários de venda do RD da LocX. Os de conteúdo (e-books, planilhas, calculadoras) não criam lead. */
+export const DEFAULT_LEAD_CONVERSIONS = [
+	"formulario-homepage",
+	"formulario-homepage-rodape",
+	"formulario-locxre",
+	"formulario-locxre-rodape",
+];
+
+export async function getLeadConversions(): Promise<string[]> {
+	const setting = await prisma.setting.findUnique({ where: { key: LEAD_CONVERSIONS_KEY } });
+	const list = (setting?.value as { identifiers?: string[] } | null)?.identifiers;
+	return Array.isArray(list) ? list : DEFAULT_LEAD_CONVERSIONS;
+}
+
+/** Demonstração e WhatsApp sempre criam lead; o resto só se o formulário estiver na lista. */
+export function isSalesConversion(identifier: string | null, channel: string, allowed: string[]) {
+	if (channel === "DEMO" || channel === "WHATSAPP" || !identifier) return true;
+	return allowed.map((a) => a.trim().toLowerCase()).includes(identifier.trim().toLowerCase());
+}
 
 export async function handleRdWebhook(payload: unknown) {
 	const rawLeads = extractRdLeads(payload);
@@ -34,11 +55,47 @@ export async function handleRdWebhook(payload: unknown) {
 		return [];
 	}
 	const results: (ProcessResult | { status: "ERROR"; message: string })[] = [];
+	const allowed = await getLeadConversions();
 	for (const raw of rawLeads) {
 		try {
 			const lead = normalizeRdLead(raw);
 			if (!lead.email && !lead.phone) throw new Error("Lead sem e-mail e sem telefone");
 			const conversion = lead.conversionIdentifier ? ` (${lead.conversionIdentifier})` : "";
+
+			if (!isSalesConversion(lead.conversionIdentifier, lead.channel, allowed)) {
+				// Conversão de conteúdo: entra no histórico de quem já é lead, mas não cria lead novo
+				const existing = await prisma.lead.findFirst({
+					where: {
+						OR: [
+							...(lead.rdLeadId ? [{ rdLeadId: lead.rdLeadId }] : []),
+							...(lead.email ? [{ email: lead.email }] : []),
+						],
+					},
+					select: { id: true },
+				});
+				if (existing) {
+					await prisma.activity.create({
+						data: { leadId: existing.id, type: "SYSTEM", title: `Conversão de conteúdo no RD Station${conversion}` },
+					});
+				}
+				const ignored: ProcessResult = {
+					status: existing ? "UPDATED" : "IGNORED",
+					leadId: existing?.id ?? null,
+					message: existing ? "Conversão de conteúdo registrada no lead" : "Conversão de conteúdo: não cria lead",
+				};
+				results.push(ignored);
+				await prisma.webhookLog.create({
+					data: {
+						source: "rd-station",
+						status: ignored.status,
+						message: ignored.message,
+						leadId: ignored.leadId,
+						payload: raw as Prisma.InputJsonValue,
+					},
+				});
+				continue;
+			}
+
 			const result = await prisma.$transaction((tx) =>
 				upsertInboundLead(
 					tx,
@@ -92,7 +149,7 @@ const SAMPLES = {
 		custom: { "Qual o seu perfil?": "Administradora", "Quantidade de imóveis que você gerencia hoje?": "51 a 200" },
 	},
 	SITE: {
-		identifier: "formulario-site",
+		identifier: "formulario-homepage",
 		custom: { "Quantos imóveis você gerencia?": "Até 50", "Como você gerencia hoje?": "Planilhas" },
 	},
 } as const;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectChannel, extractQualification, temperatureFromTimeline } from "./qualification.js";
+import { detectChannel, extractQualification, normalizePlan, temperatureFromTimeline } from "./qualification.js";
 
 describe("extractQualification", () => {
 	it("mapeia as perguntas do formulário de agendamento", () => {
@@ -18,6 +18,7 @@ describe("extractQualification", () => {
 			contractsRange: "51 a 200",
 			currentTool: "Planilhas",
 			startTimeline: "Em até 30 dias",
+			planInterest: null,
 		});
 	});
 
@@ -52,5 +53,41 @@ describe("temperatureFromTimeline", () => {
 		expect(temperatureFromTimeline("Em até 3 meses")).toBe("WARM");
 		expect(temperatureFromTimeline("Só estou pesquisando")).toBe("COLD");
 		expect(temperatureFromTimeline(null)).toBeNull();
+	});
+});
+
+describe("campos reais do RD Station da LocX", () => {
+	it("usa os identificadores conhecidos, com prioridade sobre palavras-chave", () => {
+		const q = extractQualification([
+			["cf_cargo_decisao", "Decisor"],
+			["cf_papel_gestao", "Sócio ou diretor"],
+			["cf_como_gerencia", "Planilhas"],
+			["cf_ja_usa_sistema_de_gestao", "Sim, outro sistema"],
+			["cf_qtd_contratos", "51 a 200"],
+			["cf_intencao", "Em até 30 dias"],
+			["cf_estado_uf", "SP"],
+			["cf_plano_interesse", "Pro"],
+			["cf_qual_melhor_descreve_sua_estrutura_hoje", "Holding patrimonial familiar"],
+		]);
+		expect(q).toEqual({
+			managementRole: "Sócio ou diretor",
+			currentTool: "Planilhas",
+			contractsRange: "51 a 200",
+			startTimeline: "Em até 30 dias",
+			state: "SP",
+			planInterest: "Pro",
+			businessType: "Holding patrimonial familiar",
+		});
+	});
+});
+
+describe("normalizePlan", () => {
+	it("reconhece o plano pelo nome", () => {
+		expect(normalizePlan("Plano Pro anual")).toBe("Pro");
+		expect(normalizePlan("PREMIUM")).toBe("Premium");
+		expect(normalizePlan("basic")).toBe("Basic");
+		expect(normalizePlan("Enterprise (sob consulta)")).toBe("Enterprise");
+		expect(normalizePlan("Profissional")).toBeNull();
+		expect(normalizePlan(null)).toBeNull();
 	});
 });

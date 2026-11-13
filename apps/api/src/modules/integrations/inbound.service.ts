@@ -1,5 +1,5 @@
 import type { LeadChannel, Prisma } from "@prisma/client";
-import { type Qualification, temperatureFromTimeline } from "./qualification.js";
+import { type Qualification, normalizePlan, temperatureFromTimeline } from "./qualification.js";
 
 export type AssignmentMode = "ROUND_ROBIN" | "UNASSIGNED";
 export const ASSIGNMENT_SETTING_KEY = "leadAssignment";
@@ -69,6 +69,8 @@ function fillMissing(existing: Record<string, unknown>, incoming: InboundLead) {
 		const value = incoming[key as keyof InboundLead];
 		if (!existing[key] && value) data[key] = value;
 	}
+	const plan = normalizePlan(incoming.planInterest);
+	if (!existing.plan && plan) data.plan = plan;
 	return data;
 }
 
@@ -143,6 +145,7 @@ export async function upsertInboundLead(
 			contractsRange: data.contractsRange ?? null,
 			currentTool: data.currentTool ?? null,
 			startTimeline: data.startTimeline ?? null,
+			plan: normalizePlan(data.planInterest),
 			temperature: temperatureFromTimeline(data.startTimeline),
 			channel: data.channel,
 			source: data.source,

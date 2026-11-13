@@ -14,6 +14,7 @@ export type Qualification = {
 	currentTool: string | null;
 	startTimeline: string | null;
 	state: string | null;
+	planInterest: string | null;
 };
 
 const normalize = (value: string) =>
@@ -22,14 +23,33 @@ const normalize = (value: string) =>
 		.replace(/\p{Diacritic}/gu, "")
 		.toLowerCase();
 
-// A ordem importa: "Qual seu papel na gestão dos imóveis?" contém "imóveis" (papel vem antes da quantidade)
-// e "Quantos contratos você gerencia hoje?" contém "gerencia hoje" (quantidade vem antes de "como gerencia").
+/** Campos personalizados que já existem no RD Station da LocX (api_identifier sem "cf_"). Têm prioridade. */
+const KNOWN_FIELDS: Record<string, keyof Qualification> = {
+	"papel gestao": "managementRole",
+	"como gerencia": "currentTool",
+	"qtd contratos": "contractsRange",
+	intencao: "startTimeline",
+	"estado uf": "state",
+	"plano interesse": "planInterest",
+	"qual melhor descreve sua estrutura hoje": "businessType",
+	"ja usa sistema de gestao": "currentTool",
+	"volume de imoveis contratos": "contractsRange",
+	"numero de contratos lojas": "contractsRange",
+};
+
+// Palavras-chave para perguntas com outros nomes. A ordem importa:
+// "Qual seu papel na gestão dos imóveis?" contém "imóveis" (papel vem antes da quantidade) e
+// "Quantos contratos você gerencia hoje?" contém "gerencia hoje" (quantidade vem antes de "como gerencia").
 const RULES: { field: keyof Qualification; pattern: RegExp }[] = [
+	{ field: "planInterest", pattern: /plano/ },
 	{ field: "managementRole", pattern: /papel|cargo|funcao|atuacao/ },
 	{ field: "contractsRange", pattern: /contrato|imove|quantidade|quantos|portfolio|carteira/ },
-	{ field: "startTimeline", pattern: /quando|pretende|prazo|comecar|iniciar/ },
-	{ field: "currentTool", pattern: /como .*geren|gerencia hoje|ferramenta|sistema atual|controla/ },
-	{ field: "businessType", pattern: /qualificacao|perfil|negocio|tipo de empresa|segmento|voce e/ },
+	{ field: "startTimeline", pattern: /quando|pretende|prazo|comecar|iniciar|intencao/ },
+	{
+		field: "currentTool",
+		pattern: /como .*geren|gerencia hoje|ferramenta|sistema atual|usa sistema|sistema de gestao|controla/,
+	},
+	{ field: "businessType", pattern: /qualificacao|perfil|negocio|tipo de empresa|estrutura|voce e/ },
 	{ field: "state", pattern: /^(estado|uf)$|estado|^uf/ },
 ];
 
@@ -53,15 +73,33 @@ export function extractQualification(entries: [string, unknown][]): Qualificatio
 		currentTool: null,
 		startTimeline: null,
 		state: null,
+		planInterest: null,
 	};
+	const fromKnownField = new Set<keyof Qualification>();
 	for (const [key, raw] of entries) {
 		const value = toText(raw);
 		if (!value) continue;
-		const name = normalize(key).replace(/^cf_/, "").replace(/_/g, " ");
+		const name = normalize(key).replace(/^cf_/, "").replace(/_/g, " ").trim();
+		const known = KNOWN_FIELDS[name];
+		if (known) {
+			// O primeiro campo conhecido vence; campo conhecido sempre substitui palpite por palavra-chave
+			if (!fromKnownField.has(known)) result[known] = value.slice(0, 120);
+			fromKnownField.add(known);
+			continue;
+		}
 		const rule = RULES.find((r) => r.pattern.test(name));
 		if (rule && !result[rule.field]) result[rule.field] = value.slice(0, 120);
 	}
 	return result;
+}
+
+const PLAN_NAMES = ["Enterprise", "Premium", "Basic", "Pro"] as const;
+
+/** "plano Pro anual", "PREMIUM" → nome do plano no CRM. */
+export function normalizePlan(value: string | null | undefined): string | null {
+	if (!value) return null;
+	const text = normalize(value);
+	return PLAN_NAMES.find((plan) => new RegExp(`\\b${plan.toLowerCase()}\\b`).test(text)) ?? null;
 }
 
 /** Canal de entrada a partir do identificador da conversão no RD. */

@@ -45,4 +45,5 @@ export const {
 	useUpdateAssignmentModeMutation,
 	useSendRdTestLeadMutation,
 	useSendCalTestBookingMutation,
+	useUpdateLeadConversionsMutation,
 } = dashboardApi;

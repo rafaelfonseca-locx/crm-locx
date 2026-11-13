@@ -26,6 +26,10 @@ export const dashboardApi = apiService.injectEndpoints({
 				"User",
 			],
 		}),
+		updateLeadConversions: build.mutation<ApiResponse<{ identifiers: string[] }>, { identifiers: string[] }>({
+			query: (body) => ({ url: "/integrations/settings/lead-conversions", method: "PUT", body }),
+			invalidatesTags: ["Integration"],
+		}),
 		sendCalTestBooking: build.mutation<ApiResponse<unknown>, void>({
 			query: () => ({ url: "/integrations/cal/test", method: "POST" }),
 			invalidatesTags: [

@@ -8,8 +8,10 @@ import { isManager, requireAuth } from "../../middlewares/auth.js";
 import { buildSampleCalPayload, handleCalWebhook, logCalWebhook } from "./calcom.service.js";
 import {
 	ASSIGNMENT_SETTING_KEY,
+	LEAD_CONVERSIONS_KEY,
 	buildSampleRdPayload,
 	getAssignmentMode,
+	getLeadConversions,
 	handleRdWebhook,
 } from "./rdstation.service.js";
 
@@ -58,11 +60,12 @@ integrationsRouter.use(requireAuth);
 
 integrationsRouter.get("/rd-station", async (req, res) => {
 	const since = new Date(Date.now() + -30 * 24 * 60 * 60 * 1000);
-	const [logs, received30d, calBookings30d, assignmentMode] = await Promise.all([
+	const [logs, received30d, calBookings30d, assignmentMode, leadConversions] = await Promise.all([
 		prisma.webhookLog.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
 		prisma.lead.count({ where: { source: "RD Station", createdAt: { gte: since } } }),
 		prisma.activity.count({ where: { externalId: { not: null }, createdAt: { gte: since } } }),
 		getAssignmentMode(),
+		getLeadConversions(),
 	]);
 	const manager = isManager(req.user);
 	const lastOf = (source: string) => logs.find((l) => l.source === source)?.createdAt ?? null;
@@ -72,6 +75,7 @@ integrationsRouter.get("/rd-station", async (req, res) => {
 			: null,
 		calWebhookUrl: manager ? `${env.PUBLIC_API_URL}/api/integrations/cal/webhook?token=${env.RD_WEBHOOK_TOKEN}` : null,
 		assignmentMode,
+		leadConversions,
 		received30d,
 		calBookings30d,
 		lastReceivedAt: lastOf("rd-station"),
@@ -99,6 +103,21 @@ integrationsRouter.put("/settings/assignment", async (req, res) => {
 		update: { value: { mode } },
 	});
 	return ok(res, { mode });
+});
+
+integrationsRouter.put("/settings/lead-conversions", async (req, res) => {
+	if (!isManager(req.user)) throw new HttpError(403, "Você não tem permissão para realizar esta ação.");
+	const { identifiers } = parse(
+		z.object({ identifiers: z.array(z.string().trim().toLowerCase().min(1).max(120)).max(100) }),
+		req.body,
+	);
+	const unique = [...new Set(identifiers)];
+	await prisma.setting.upsert({
+		where: { key: LEAD_CONVERSIONS_KEY },
+		create: { key: LEAD_CONVERSIONS_KEY, value: { identifiers: unique } },
+		update: { value: { identifiers: unique } },
+	});
+	return ok(res, { identifiers: unique });
 });
 
 integrationsRouter.post("/rd-station/test", async (req, res) => {

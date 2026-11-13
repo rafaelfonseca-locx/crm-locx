@@ -16,7 +16,7 @@ const STAGES: LeadStage[] = ["NEW", "QUALIFICATION", "MEETING", "TRIAL", "CLOSIN
 const TEAM: { name: string; email: string; role: Role; photo: string; color: string; receivesLeads: boolean }[] = [
 	{
 		name: "Douglas Andrade",
-		email: "douglas.andrade@locximoveis.com.br",
+		email: "douglas.andrade@locx.com.br",
 		role: "MANAGER",
 		photo: "douglas",
 		color: "#455A64",
@@ -24,7 +24,7 @@ const TEAM: { name: string; email: string; role: Role; photo: string; color: str
 	},
 	{
 		name: "Rafael Fonseca",
-		email: "rafael.fonseca@locximoveis.com.br",
+		email: "rafael.fonseca@locx.com.br",
 		role: "MANAGER",
 		photo: "rafael",
 		color: "#0288D1",
@@ -48,7 +48,7 @@ const TEAM: { name: string; email: string; role: Role; photo: string; color: str
 	},
 	{
 		name: "Guilherme Rodrigues",
-		email: "guilherme.rodrigues@locximoveis.com.br",
+		email: "guilherme.rodrigues@locx.com.br",
 		role: "SALES",
 		photo: "guilherme",
 		color: "#7B1FA2",
@@ -201,7 +201,7 @@ const CHANNEL_CONFIG: Record<
 		identifier: "formulario-whatsapp",
 		utm: { utmSource: "facebook", utmMedium: "paid-social", utmCampaign: "imobiliarias-2026" },
 	},
-	SITE: { identifier: "formulario-site", utm: { utmSource: "organic", utmMedium: "blog", utmCampaign: null } },
+	SITE: { identifier: "formulario-homepage", utm: { utmSource: "organic", utmMedium: "blog", utmCampaign: null } },
 };
 const LOST_REASONS = ["Preço", "Escolheu concorrente", "Sem resposta", "Sem fit com o produto", "Momento inadequado"];
 const NOTES = [
@@ -222,6 +222,11 @@ async function upsertTeam() {
 	const passwordHash = await bcrypt.hash(INITIAL_PASSWORD, 10);
 	const users = [];
 	for (const member of TEAM) {
+		// E-mails antigos (@locximoveis.com.br) passam para o domínio atual, mantendo senha e histórico
+		const oldEmail = member.email.replace("@locx.com.br", "@locximoveis.com.br");
+		const old = await prisma.user.findUnique({ where: { email: oldEmail }, select: { id: true } });
+		const current = await prisma.user.findUnique({ where: { email: member.email }, select: { id: true } });
+		if (old && !current) await prisma.user.update({ where: { id: old.id }, data: { email: member.email } });
 		const data = {
 			name: member.name,
 			role: member.role,

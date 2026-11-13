@@ -18,7 +18,8 @@
 		"lint": "biome check apps",
 		"db:clear": "npm run db:clear --workspace apps/api",
 		"db:import": "npm run db:import --workspace apps/api --",
-		"db:reset-password": "npm run db:reset-password --workspace apps/api --"
+		"db:reset-password": "npm run db:reset-password --workspace apps/api --",
+		"db:apply-plan": "npm run db:apply-plan --workspace apps/api --"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",

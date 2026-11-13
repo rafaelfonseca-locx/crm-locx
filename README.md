@@ -76,6 +76,7 @@ Atalhos: `Ctrl/⌘ + K` abre a busca global (nome, empresa, e-mail, telefone ou 
 ## Arquitetura
 
 Detalhes técnicos, recursos necessários e análise de segurança para o TI: [docs/TECNICO-E-SEGURANCA.md](docs/TECNICO-E-SEGURANCA.md).
+Funcionalidades mapeadas e ordem de desenvolvimento: [docs/PLANO-FUNCIONALIDADES.md](docs/PLANO-FUNCIONALIDADES.md).
 
 ```
 apps/
@@ -144,6 +145,20 @@ Volta a senha para `locx@2026` (a pessoa troca no próximo acesso). Sem e-mail, 
 ```bash
 npm run db:reset-password -- rafael.fonseca@locx.com.br
 ```
+
+### Aplicar decisões de reunião em lote
+
+Responsáveis, parceiros, indicações, tags, reaberturas e notas a partir de um plano em JSON (fora do repositório, tem dados pessoais). Primeiro simula, depois grava:
+
+```bash
+npm run db:apply-plan -- "C:\caminho\plano.json"
+```
+
+```bash
+npm run db:apply-plan -- "C:\caminho\plano.json" --aplicar
+```
+
+Rodar de novo não duplica nada.
 
 ## Importar a base atual (Handoff RE Patrimonial)
 

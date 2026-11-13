@@ -35,7 +35,7 @@ export function LeadConversionsEditor({ identifiers, canEdit }: { identifiers: s
 				<Typography variant="body2" fontWeight={600}>
 					Formulários que criam lead
 				</Typography>
-				<InfoTip title="Identificadores de conversão do RD que viram lead. Downloads de e-book, planilhas e calculadoras não criam lead: só aparecem no histórico de quem já é lead. Demonstração e WhatsApp sempre criam lead." />
+				<InfoTip title="Formulários do RD que viram lead (holding). Conversões fora da lista (e-books, planilhas, calculadoras, formulários do corporativo) não criam lead: só aparecem no histórico de quem já é lead. WhatsApp (botao-wpp-holding) e demonstração (agendou_demonstracao) sempre criam lead." />
 			</div>
 			<div className="flex flex-wrap gap-1.5">
 				{identifiers.map((id) => (

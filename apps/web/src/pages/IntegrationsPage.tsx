@@ -60,19 +60,19 @@ const CHANNELS: { channel: Exclude<LeadChannel, "MANUAL">; flow: string; questio
 		channel: "DEMO",
 		flow: "Entra em Reunião, com data, horário e link do Cal.com. O vendedor da agenda vira o responsável.",
 		questions: FULL_QUESTIONS,
-		identifier: "agendar-demonstracao",
+		identifier: "agendou_demonstracao",
 	},
 	{
 		channel: "WHATSAPP",
 		flow: "Entra em Novo lead com a tarefa “Fazer o pré-atendimento pelo WhatsApp” em até 1 hora.",
 		questions: BASIC_QUESTIONS,
-		identifier: "formulario-whatsapp",
+		identifier: "botao-wpp-holding",
 	},
 	{
 		channel: "SITE",
 		flow: "Entra em Novo lead com a tarefa “Fazer o primeiro contato” em até 1 hora.",
 		questions: BASIC_QUESTIONS,
-		identifier: "formulario-site",
+		identifier: "formulario-lp-re_patrimonial",
 	},
 ];
 

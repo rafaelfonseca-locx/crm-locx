@@ -44,6 +44,12 @@ describe("detectChannel", () => {
 		expect(detectChannel("landing-gestao-locacao")).toBe("SITE");
 		expect(detectChannel(null)).toBe("SITE");
 	});
+
+	it("reconhece as conversões de holding da LocX", () => {
+		expect(detectChannel("botao-wpp-holding")).toBe("WHATSAPP");
+		expect(detectChannel("agendou_demonstracao")).toBe("DEMO");
+		expect(detectChannel("formulario-lp-re_patrimonial")).toBe("SITE");
+	});
 });
 
 describe("temperatureFromTimeline", () => {

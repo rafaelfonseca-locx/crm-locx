@@ -194,14 +194,17 @@ const CHANNEL_CONFIG: Record<
 	{ identifier: string; utm: { utmSource: string; utmMedium: string; utmCampaign: string | null } }
 > = {
 	DEMO: {
-		identifier: "agendar-demonstracao",
+		identifier: "agendou_demonstracao",
 		utm: { utmSource: "google", utmMedium: "cpc", utmCampaign: "gestao-locacao" },
 	},
 	WHATSAPP: {
-		identifier: "formulario-whatsapp",
+		identifier: "botao-wpp-holding",
 		utm: { utmSource: "facebook", utmMedium: "paid-social", utmCampaign: "imobiliarias-2026" },
 	},
-	SITE: { identifier: "formulario-homepage", utm: { utmSource: "organic", utmMedium: "blog", utmCampaign: null } },
+	SITE: {
+		identifier: "formulario-lp-re_patrimonial",
+		utm: { utmSource: "organic", utmMedium: "blog", utmCampaign: null },
+	},
 };
 const LOST_REASONS = ["Preço", "Escolheu concorrente", "Sem resposta", "Sem fit com o produto", "Momento inadequado"];
 const NOTES = [

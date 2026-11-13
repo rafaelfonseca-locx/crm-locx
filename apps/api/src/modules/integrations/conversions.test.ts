@@ -5,9 +5,10 @@ vi.mock("../../lib/prisma.js", () => ({ prisma: {} }));
 const { DEFAULT_LEAD_CONVERSIONS, isSalesConversion } = await import("./rdstation.service.js");
 
 describe("isSalesConversion", () => {
-	it("formulários de venda criam lead", () => {
-		expect(isSalesConversion("formulario-homepage", "SITE", DEFAULT_LEAD_CONVERSIONS)).toBe(true);
-		expect(isSalesConversion("Formulario-LocXRE-Rodape", "SITE", DEFAULT_LEAD_CONVERSIONS)).toBe(true);
+	it("formulário de holding cria lead; os do corporativo não", () => {
+		expect(isSalesConversion("formulario-lp-re_patrimonial", "SITE", DEFAULT_LEAD_CONVERSIONS)).toBe(true);
+		expect(isSalesConversion("Formulario-LP-RE_Patrimonial", "SITE", DEFAULT_LEAD_CONVERSIONS)).toBe(true);
+		expect(isSalesConversion("formulario-locxre", "SITE", DEFAULT_LEAD_CONVERSIONS)).toBe(false);
 	});
 
 	it("conversões de conteúdo não criam lead", () => {
@@ -16,7 +17,7 @@ describe("isSalesConversion", () => {
 	});
 
 	it("demonstração e WhatsApp sempre criam lead", () => {
-		expect(isSalesConversion("agendar-demonstracao", "DEMO", [])).toBe(true);
-		expect(isSalesConversion("form-whatsapp", "WHATSAPP", [])).toBe(true);
+		expect(isSalesConversion("agendou_demonstracao", "DEMO", [])).toBe(true);
+		expect(isSalesConversion("botao-wpp-holding", "WHATSAPP", [])).toBe(true);
 	});
 });

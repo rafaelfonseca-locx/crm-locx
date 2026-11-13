@@ -4,8 +4,22 @@ import { z } from "zod";
 import { HttpError, notFound, ok, parse } from "../../lib/http.js";
 import { prisma } from "../../lib/prisma.js";
 import { isManager } from "../../middlewares/auth.js";
+import {
+	createCalendarEvent,
+	deleteCalendarEvent,
+	hasGoogle,
+	parseMeetCode,
+	updateCalendarEvent,
+} from "../google/google.service.js";
 import { userSummarySelect } from "../leads/leads.include.js";
 import { moveStage } from "../leads/leads.service.js";
+import { leadUrl, notifySafely } from "../notifications/notifications.service.js";
+
+/** Dono do evento no Google: quem estava conduzindo quando a reunião foi criada. */
+function calendarOwner(activity: { metadata: Prisma.JsonValue; assigneeId: string | null }) {
+	const meta = activity.metadata as { calendarUserId?: string } | null;
+	return meta?.calendarUserId ?? activity.assigneeId;
+}
 
 export const activitiesRouter = Router();
 
@@ -27,6 +41,9 @@ const createSchema = z
 		assigneeId: z.string().nullish(),
 		completed: z.boolean().optional(),
 		moveToMeetingStage: z.boolean().optional(),
+		// Reunião: duração e criação do evento no Google Agenda (com link do Meet)
+		durationMin: z.coerce.number().int().min(15).max(240).optional(),
+		syncGoogle: z.boolean().optional(),
 	})
 	.superRefine((value, ctx) => {
 		if ((value.type === "TASK" || value.type === "MEETING") && !value.dueAt) {
@@ -76,10 +93,40 @@ activitiesRouter.get("/leads/:id/activities", async (req, res) => {
 activitiesRouter.post("/leads/:id/activities", async (req, res) => {
 	const leadId = Number(req.params.id);
 	const body = parse(createSchema, req.body);
-	const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true, stage: true, status: true } });
+	const lead = await prisma.lead.findUnique({
+		where: { id: leadId },
+		select: { id: true, stage: true, status: true, email: true, name: true, companyName: true },
+	});
 	if (!lead) throw notFound("Lead");
 
 	const isSchedulable = body.type === "TASK" || body.type === "MEETING";
+	const assigneeId = isSchedulable ? (body.assigneeId ?? req.user.id) : null;
+
+	// Reunião no Google Agenda de quem conduz, com link do Meet e o lead como convidado
+	let google: { eventId: string; meetingUrl: string | null; meetingCode: string | null } | null = null;
+	let googleWarning: string | null = null;
+	if (
+		body.type === "MEETING" &&
+		body.dueAt &&
+		body.syncGoogle !== false &&
+		(await hasGoogle(assigneeId)) &&
+		assigneeId
+	) {
+		try {
+			google = await createCalendarEvent(assigneeId, {
+				summary: body.title ?? `Demonstração LocX · ${lead.companyName ?? lead.name}`,
+				description: [body.body, `Lead no CRM: ${leadUrl(leadId)}`].filter(Boolean).join("\n\n"),
+				start: body.dueAt,
+				durationMin: body.durationMin ?? 45,
+				attendeeEmail: lead.email,
+			});
+		} catch (error) {
+			googleWarning = "Reunião salva no CRM, mas não foi possível criar o evento no Google Agenda";
+			console.error("Falha ao criar evento no Google:", error instanceof Error ? error.message : error);
+		}
+	}
+	const meetingUrl = body.meetingUrl || google?.meetingUrl || null;
+
 	const activity = await prisma.activity.create({
 		data: {
 			leadId,
@@ -87,9 +134,13 @@ activitiesRouter.post("/leads/:id/activities", async (req, res) => {
 			title: body.title ?? null,
 			body: body.body ?? null,
 			dueAt: body.dueAt ?? null,
-			meetingUrl: body.meetingUrl ?? null,
+			meetingUrl,
+			meetingCode: google?.meetingCode ?? parseMeetCode(meetingUrl),
+			googleEventId: google?.eventId ?? null,
+			durationMin: body.type === "MEETING" ? (body.durationMin ?? 45) : null,
+			metadata: google ? { calendarUserId: assigneeId } : undefined,
 			authorId: req.user.id,
-			assigneeId: isSchedulable ? (body.assigneeId ?? req.user.id) : null,
+			assigneeId,
 			completedAt: !isSchedulable || body.completed ? new Date() : null,
 		},
 		include: activityInclude,
@@ -111,7 +162,16 @@ activitiesRouter.post("/leads/:id/activities", async (req, res) => {
 		await moveStage(leadId, "QUALIFICATION", req.user.id);
 	}
 
-	return ok(res, activity, undefined, 201);
+	if (activity.assigneeId && activity.assigneeId !== req.user.id && (body.type === "TASK" || body.type === "MEETING")) {
+		notifySafely([activity.assigneeId], {
+			type: "TASK_ASSIGNED",
+			title: `${body.type === "MEETING" ? "Reunião" : "Tarefa"} para você: ${activity.title ?? ""}`,
+			body: `${activity.lead.companyName ?? activity.lead.name} · criada por ${req.user.name}`,
+			leadId,
+			actorId: req.user.id,
+		});
+	}
+	return ok(res, { ...activity, googleWarning }, undefined, 201);
 });
 
 activitiesRouter.patch("/activities/:activityId", async (req, res) => {
@@ -123,9 +183,23 @@ activitiesRouter.patch("/activities/:activityId", async (req, res) => {
 	const { completed, ...data } = body;
 	const activity = await prisma.activity.update({
 		where: { id: current.id },
-		data: { ...data, ...(completed === undefined ? {} : { completedAt: completed ? new Date() : null }) },
+		data: {
+			...data,
+			...(data.meetingUrl !== undefined ? { meetingCode: parseMeetCode(data.meetingUrl) ?? current.meetingCode } : {}),
+			...(completed === undefined ? {} : { completedAt: completed ? new Date() : null }),
+		},
 		include: activityInclude,
 	});
+	const calendarUserId = calendarOwner(current);
+	if (current.googleEventId && calendarUserId && (data.dueAt || data.title)) {
+		updateCalendarEvent(calendarUserId, current.googleEventId, {
+			summary: data.title ?? undefined,
+			start: data.dueAt ?? undefined,
+			durationMin: current.durationMin ?? 45,
+		}).catch((error) =>
+			console.error("Falha ao atualizar evento no Google:", error instanceof Error ? error.message : error),
+		);
+	}
 	return ok(res, activity);
 });
 
@@ -138,6 +212,12 @@ activitiesRouter.delete("/activities/:activityId", async (req, res) => {
 		throw new HttpError(403, "Somente quem registrou a atividade pode excluí-la");
 	}
 	await prisma.activity.delete({ where: { id: current.id } });
+	const calendarUserId = calendarOwner(current);
+	if (current.googleEventId && calendarUserId) {
+		deleteCalendarEvent(calendarUserId, current.googleEventId).catch((error) =>
+			console.error("Falha ao cancelar evento no Google:", error instanceof Error ? error.message : error),
+		);
+	}
 	return ok(res, { id: current.id });
 });
 

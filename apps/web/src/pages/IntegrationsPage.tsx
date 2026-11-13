@@ -3,6 +3,7 @@ import { PageHeader, PageSimple, PageTitle } from "@/components/layout/Page";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InfoTip } from "@/components/ui/InfoTip";
 import { LeadConversionsEditor } from "@/features/integrations/LeadConversionsEditor";
+import { RdApiConnection } from "@/features/integrations/RdApiConnection";
 import { CHANNEL_ICONS } from "@/features/leads/components/ChannelIcon";
 import { CHANNEL_META, QUALIFICATION_OPTIONS } from "@/features/leads/constants";
 import { useAuth } from "@/hooks/useAuth";
@@ -318,6 +319,7 @@ export function IntegrationsPage() {
 									<Alert severity="info">Somente gestores veem a URL do webhook.</Alert>
 								)}
 								<LeadConversionsEditor identifiers={rd.leadConversions} canEdit={isManager} />
+								<RdApiConnection status={rd.rdApi} canEdit={isManager} />
 							</IntegrationCard>
 
 							<IntegrationCard
@@ -461,7 +463,9 @@ export function IntegrationsPage() {
 															</Typography>
 															<Chip
 																size="small"
-																label={log.source === "cal.com" ? "Cal.com" : "RD"}
+																label={
+																	log.source === "cal.com" ? "Cal.com" : log.source === "rd-sync" ? "CRM → RD" : "RD"
+																}
 																sx={{ height: 18, fontSize: 10, fontWeight: 700 }}
 															/>
 														</div>

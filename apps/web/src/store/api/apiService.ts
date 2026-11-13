@@ -24,7 +24,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 	return result;
 };
 
-export const TAGS = ["Lead", "Activity", "User", "Me", "Dashboard", "Trial", "Integration"] as const;
+export const TAGS = ["Lead", "Activity", "User", "Me", "Dashboard", "Trial", "Integration", "Notification"] as const;
 
 export const apiService = createApi({
 	reducerPath: "api",

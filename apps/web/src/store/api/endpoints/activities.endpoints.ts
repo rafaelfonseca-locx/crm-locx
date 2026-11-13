@@ -12,7 +12,10 @@ export const activitiesApi = apiService.injectEndpoints({
 			query: (params) => ({ url: "/activities", params: cleanParams(params) }),
 			providesTags: [{ type: "Activity", id: "AGENDA" }],
 		}),
-		createActivity: build.mutation<ApiResponse<Activity>, { leadId: number } & ActivityPayload>({
+		createActivity: build.mutation<
+			ApiResponse<Activity & { googleWarning?: string | null }>,
+			{ leadId: number } & ActivityPayload
+		>({
 			query: ({ leadId, ...body }) => ({ url: `/leads/${leadId}/activities`, method: "POST", body }),
 			invalidatesTags: (_r, _e, { leadId }) => [
 				{ type: "Activity", id: `LEAD-${leadId}` },

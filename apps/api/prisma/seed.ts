@@ -184,10 +184,16 @@ const COMPANIES = [
 	"Oeste Imóveis",
 ];
 const STATES = ["SP", "SP", "MG", "PR", "RS", "SC", "RJ", "GO", "PE", "BA"];
-const BUSINESS_TYPES = ["Imobiliária", "Administradora de imóveis", "Proprietário ou investidor", "Corretor autônomo"];
-const ROLES = ["Sócio ou diretor", "Gerente", "Corretor", "Administrativo ou financeiro"];
-const CONTRACTS = ["Até 50", "51 a 200", "201 a 500", "501 a 1.000", "Mais de 1.000"];
-const TOOLS = ["Planilhas", "Outro sistema", "Papel ou manual"];
+const BUSINESS_TYPES = [
+	"Holding patrimonial familiar",
+	"Pessoa física com imóveis próprios",
+	"Family office",
+	"Empresa com imóveis para renda",
+	"Administradora/consultoria patrimonial",
+];
+const ROLES = ["Sócio ou diretor", "Gestor do patrimônio", "Financeiro ou administrativo", "Consultor ou assessor"];
+const CONTRACTS = ["1 a 5", "6 a 25", "26 a 50", "51 a 100", "Mais de 100"];
+const TOOLS = ["Não, uso planilha", "Sim, outro sistema", "Não gerencio ainda"];
 const TIMELINES = ["Imediatamente", "Em até 30 dias", "Em até 3 meses", "Só estou pesquisando"];
 const CHANNEL_CONFIG: Record<
 	Exclude<LeadChannel, "MANUAL">,

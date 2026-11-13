@@ -1,5 +1,6 @@
 import { LeadDialogsProvider } from "@/features/leads/components/dialogs/LeadDialogsProvider";
 import { OnboardingProvider } from "@/features/onboarding/OnboardingProvider";
+import { useNotify } from "@/hooks/useNotify";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
@@ -7,7 +8,7 @@ import IconButton from "@mui/material/IconButton";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { Menu as MenuIcon, Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Outlet } from "react-router";
+import { Outlet, useSearchParams } from "react-router";
 import { LocxLogo } from "./Brand";
 import { CommandPalette } from "./CommandPalette";
 import { Sidebar } from "./Sidebar";
@@ -18,6 +19,19 @@ export function AppLayout() {
 	const [mobileOpen, setMobileOpen] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [prefs, setPrefs] = usePersistentState("layoutPrefs", { collapsed: false });
+	const [searchParams, setSearchParams] = useSearchParams();
+	const notify = useNotify();
+
+	// Volta do consentimento do Google
+	useEffect(() => {
+		const google = searchParams.get("google");
+		if (!google) return;
+		if (google === "conectado")
+			notify.success("Google Agenda conectado. As próximas reuniões já vão para a sua agenda");
+		else notify.apiError(null, "Não foi possível conectar o Google. Tente de novo em Preferências");
+		searchParams.delete("google");
+		setSearchParams(searchParams, { replace: true });
+	}, [searchParams, setSearchParams, notify]);
 
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {

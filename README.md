@@ -22,11 +22,11 @@ Opções sugeridas (as mesmas no CRM, no RD e no Cal.com):
 
 | Pergunta | Opções |
 |---|---|
-| Perfil do negócio | Imobiliária, Administradora de imóveis, Proprietário ou investidor, Corretor autônomo, Outro |
-| Contratos de aluguel | Até 50, 51 a 200, 201 a 500, 501 a 1.000, Mais de 1.000 |
-| Papel na gestão | Sócio ou diretor, Gerente, Corretor, Administrativo ou financeiro, Outro |
-| Como gerencia hoje | Planilhas, Outro sistema, Papel ou manual, Ainda não administro |
-| Quando pretende começar | Imediatamente, Em até 30 dias, Em até 3 meses, Só estou pesquisando |
+| Perfil do negócio (`cf_qual_melhor_descreve_sua_estrutura_hoje`) | Pessoa física com imóveis próprios, Holding patrimonial familiar, Family office, Empresa com imóveis para renda, Administradora/consultoria patrimonial, Outro |
+| Imóveis/contratos administrados (`cf_qtd_contratos`) | 1 a 5, 6 a 25, 26 a 50, 51 a 100, Mais de 100 |
+| Papel na gestão (`cf_papel_gestao`) | Sócio ou diretor, Gestor do patrimônio, Financeiro ou administrativo, Consultor ou assessor, Outro |
+| Já usa sistema de gestão? (`cf_ja_usa_sistema_de_gestao`) | Não, uso planilha; Sim, outro sistema; Não gerencio ainda |
+| Quando pretende começar (`cf_intencao`) | Imediatamente, Em até 30 dias, Em até 3 meses, Só estou pesquisando |
 
 O CRM reconhece as perguntas pelo nome do campo (ex.: `cf_quantos_contratos` ou "Quantos imóveis você gerencia?"), então não precisa de nomes exatos. "Quando pretende começar" define a temperatura: até 30 dias = quente, até 3 meses = morno, pesquisando = frio.
 
@@ -134,6 +134,62 @@ Testes da API:
 npm test
 ```
 
+## Importar a base atual (Handoff RE Patrimonial)
+
+Importa os leads do arquivo de handoff (o HTML com o histórico comercial) com etapa, histórico, notas, reuniões, trials, plano, temperatura e motivo de perda:
+
+```bash
+npm run db:clear
+```
+
+```bash
+npm run db:import -- "C:\caminho\para\Handoff_RE_Patrimonial.html"
+```
+
+- `db:clear` apaga os leads de exemplo do seed (o time é mantido). Pule se já tiver leads reais.
+- Rodar a importação de novo não duplica: leads já importados ou com o mesmo e-mail são pulados.
+- Responsáveis que não estão no time entram **sem responsável** (o nome original fica no histórico); Douglas e Isabela mantêm os deles.
+- Pausados entram como **perdidos, motivo "Pausado"** (dá para reabrir).
+- **O arquivo tem dados pessoais: não coloque no repositório.**
+
+## Notificações
+
+- **No sistema:** sininho na barra lateral (lead novo ou transferido, pessoa adicionada ao processo, tarefa delegada, reunião em 15 minutos, tarefa atrasada, trial terminando, agendamentos do Cal.com e transcrição pronta). Dá para ativar o alerta do navegador.
+- **Por e-mail:** lead novo para mim, agendamentos do Cal.com e resumo diário às 8h. Cada pessoa escolhe em **Preferências** (menu do usuário).
+- Para enviar e-mails, preencha `SMTP_*` no `.env` da API. Funciona com o relay SMTP do Google Workspace (configurado pelo administrador em *Apps › Google Workspace › Gmail › Roteamento › Serviço de relay SMTP*), com o Resend ou com o servidor de e-mail da empresa.
+
+## Google Agenda, Meet e transcrições
+
+Com o Google conectado, **agendar reunião no CRM cria o evento na agenda de quem conduz, com link do Meet e o lead como convidado**. Remarcar ou excluir no CRM atualiza o Google. Depois da reunião, o CRM busca a **transcrição do Meet** (a cada 10 minutos, por até 3 dias) e, com a chave da Anthropic, gera um **resumo** (cenário, dores, objeções, próximos passos e temperatura sugerida) na linha do tempo do lead. Reuniões do Cal.com com link do Meet também ganham transcrição.
+
+Configuração (uma vez, por quem administra o Google Workspace):
+
+1. Em https://console.cloud.google.com crie um projeto (ex.: "LocX CRM").
+2. Em **APIs e serviços › Biblioteca**, ative **Google Calendar API** e **Google Meet REST API**.
+3. Em **Tela de consentimento OAuth**, escolha **Interno** (só contas `@locx.com.br`).
+4. Em **Credenciais › Criar credenciais › ID do cliente OAuth › Aplicativo da Web**, adicione o URI de redirecionamento `http://localhost:3333/api/integrations/google/callback` (e depois o do servidor da empresa).
+5. Copie o ID e a chave secreta para `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no `.env` da API e reinicie.
+6. Cada pessoa clica em **Preferências › Google Agenda e Meet › Conectar**.
+
+Requisitos: a transcrição do Meet existe nos planos Business Standard ou superior e precisa estar ligada na reunião (ou automática nas configurações do Workspace). Para o resumo por IA, coloque `ANTHROPIC_API_KEY` no `.env` (modelo `claude-opus-5-5`).
+
+## RD Station pela API (app da LocX)
+
+Além do webhook (RD → CRM), o CRM devolve o andamento para o RD (CRM → RD):
+
+| No CRM | No RD |
+|---|---|
+| Novo lead, Pré-atendimento | Lead |
+| Reunião, Trial, Venda (em aberto) | Lead Qualificado, marcado como oportunidade |
+| Ganho | Cliente + venda registrada com o valor |
+| Perdido | Oportunidade perdida, com o motivo |
+
+1. No app do RD Station App Store, cadastre a URL de retorno `http://localhost:3333/api/integrations/rd-station/callback` (e depois a do servidor).
+2. Coloque `RD_CLIENT_ID` e `RD_CLIENT_SECRET` no `.env` da API e reinicie.
+3. Em **Integrações › RD Station**, um gestor clica em **Conectar RD Station**.
+
+Cada sincronização aparece em **Eventos recebidos** como "CRM → RD".
+
 ## Conectar o Cal.com
 
 1. No CRM, como gestor, abra **Integrações** e copie a URL do webhook do Cal.com.
@@ -181,7 +237,6 @@ Todas as rotas (exceto login, health e webhook) exigem `Authorization: Bearer <t
 
 ## Próximos passos sugeridos
 
-- Notificações (e-mail ou WhatsApp) para lead novo e trial terminando.
-- Sincronizar etapa e venda de volta para o RD Station (marcar oportunidade/venda) via API do RD.
-- Puxar dados de uso do produto durante o trial para um indicador de saúde do teste.
-- Deploy (por exemplo, API e Postgres no Render/Railway e front-end na Vercel).
+- Publicar no servidor da empresa (API Node + PostgreSQL + front estático) e trocar as URLs de retorno do Google e do RD.
+- Avisos pelo WhatsApp (ex.: lead novo para o vendedor).
+- Puxar dados de uso da conta de teste durante o trial para um indicador de saúde.

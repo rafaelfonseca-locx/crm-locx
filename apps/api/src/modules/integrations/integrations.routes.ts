@@ -7,6 +7,14 @@ import { prisma } from "../../lib/prisma.js";
 import { isManager, requireAuth } from "../../middlewares/auth.js";
 import { buildSampleCalPayload, handleCalWebhook, logCalWebhook } from "./calcom.service.js";
 import {
+	buildRdAuthUrl,
+	connectRd,
+	disconnectRd,
+	getRdConnection,
+	isRdApiConfigured,
+	readRdState,
+} from "./rdstation.api.js";
+import {
 	ASSIGNMENT_SETTING_KEY,
 	LEAD_CONVERSIONS_KEY,
 	buildSampleRdPayload,
@@ -56,16 +64,41 @@ rdWebhookRouter.post("/cal/webhook", async (req, res) => {
 	}
 });
 
+// Volta da autorização do app no RD Station (sem login: o "state" assinado identifica quem conectou)
+rdWebhookRouter.get("/rd-station/callback", async (req, res) => {
+	const web = env.WEB_ORIGIN.split(",")[0].trim();
+	try {
+		readRdState(String(req.query.state ?? ""));
+		await connectRd(String(req.query.code ?? ""));
+		return res.redirect(`${web}/integracoes?rd=conectado`);
+	} catch (error) {
+		console.error("Falha ao conectar o RD:", error instanceof Error ? error.message : error);
+		return res.redirect(`${web}/integracoes?rd=erro`);
+	}
+});
+
 integrationsRouter.use(requireAuth);
+
+integrationsRouter.post("/rd-station/connect", async (req, res) => {
+	if (!isManager(req.user)) throw new HttpError(403, "Você não tem permissão para realizar esta ação.");
+	return ok(res, { url: buildRdAuthUrl(req.user.id) });
+});
+
+integrationsRouter.delete("/rd-station/connection", async (req, res) => {
+	if (!isManager(req.user)) throw new HttpError(403, "Você não tem permissão para realizar esta ação.");
+	await disconnectRd();
+	return ok(res, { ok: true });
+});
 
 integrationsRouter.get("/rd-station", async (req, res) => {
 	const since = new Date(Date.now() + -30 * 24 * 60 * 60 * 1000);
-	const [logs, received30d, calBookings30d, assignmentMode, leadConversions] = await Promise.all([
+	const [logs, received30d, calBookings30d, assignmentMode, leadConversions, rdConnection] = await Promise.all([
 		prisma.webhookLog.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
 		prisma.lead.count({ where: { source: "RD Station", createdAt: { gte: since } } }),
 		prisma.activity.count({ where: { externalId: { not: null }, createdAt: { gte: since } } }),
 		getAssignmentMode(),
 		getLeadConversions(),
+		getRdConnection(),
 	]);
 	const manager = isManager(req.user);
 	const lastOf = (source: string) => logs.find((l) => l.source === source)?.createdAt ?? null;
@@ -76,6 +109,11 @@ integrationsRouter.get("/rd-station", async (req, res) => {
 		calWebhookUrl: manager ? `${env.PUBLIC_API_URL}/api/integrations/cal/webhook?token=${env.RD_WEBHOOK_TOKEN}` : null,
 		assignmentMode,
 		leadConversions,
+		rdApi: {
+			configured: isRdApiConfigured(),
+			connected: !!rdConnection,
+			connectedAt: rdConnection?.connectedAt ?? null,
+		},
 		received30d,
 		calBookings30d,
 		lastReceivedAt: lastOf("rd-station"),

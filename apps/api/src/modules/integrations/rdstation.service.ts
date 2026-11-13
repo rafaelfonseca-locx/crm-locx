@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { notifySafely } from "../notifications/notifications.service.js";
 import { ASSIGNMENT_SETTING_KEY, type AssignmentMode, upsertInboundLead } from "./inbound.service.js";
 import { extractRdLeads, normalizeRdLead } from "./rdstation.mapper.js";
 
@@ -114,6 +115,14 @@ export async function handleRdWebhook(payload: unknown) {
 						: "Conversão registrada em lead existente",
 			};
 			results.push(processed);
+			if (result.created && result.ownerId) {
+				notifySafely([result.ownerId], {
+					type: "LEAD_ASSIGNED",
+					title: `Novo lead para você: ${lead.companyName ?? lead.name}`,
+					body: `${CHANNEL_LABELS[lead.channel]}. Faça o primeiro contato em até 1 hora.`,
+					leadId: result.leadId,
+				});
+			}
 			await prisma.webhookLog.create({
 				data: {
 					source: "rd-station",
@@ -138,20 +147,20 @@ const SAMPLES = {
 	DEMO: {
 		identifier: "agendou_demonstracao",
 		custom: {
-			"Qualificação do negócio": "Imobiliária",
+			"Qualificação do negócio": "Holding patrimonial familiar",
 			"Qual seu papel na gestão dos imóveis?": "Sócio ou diretor",
-			"Quantos contratos de aluguel você gerencia hoje?": "201 a 500",
-			"Como você gerencia hoje?": "Outro sistema",
+			"Quantos contratos de aluguel você gerencia hoje?": "26 a 50",
+			"Como você gerencia hoje?": "Sim, outro sistema",
 			"Quando você pretende começar a usar um sistema?": "Em até 30 dias",
 		},
 	},
 	WHATSAPP: {
 		identifier: "botao-wpp-holding",
-		custom: { "Qual o seu perfil?": "Administradora", "Quantidade de imóveis que você gerencia hoje?": "51 a 200" },
+		custom: { "Qual o seu perfil?": "Family office", "Quantidade de imóveis que você gerencia hoje?": "6 a 25" },
 	},
 	SITE: {
 		identifier: "formulario-lp-re_patrimonial",
-		custom: { "Quantos imóveis você gerencia?": "Até 50", "Como você gerencia hoje?": "Planilhas" },
+		custom: { "Quantos imóveis você gerencia?": "1 a 5", "Como você gerencia hoje?": "Não, uso planilha" },
 	},
 } as const;
 

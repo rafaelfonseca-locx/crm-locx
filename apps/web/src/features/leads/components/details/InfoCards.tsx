@@ -11,6 +11,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { Copy, ExternalLink, Mail, MessageCircle, Pencil, Phone } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link as RouterLink } from "react-router";
 import { BILLING_CYCLE_LABELS, CHANNEL_META, QUALIFICATION_LABELS, TEMPERATURE_META } from "../../constants";
 import { ChannelIcon } from "../ChannelIcon";
 
@@ -246,6 +247,18 @@ export function OriginCard({ lead }: { lead: Lead }) {
 					</span>
 				</DetailField>
 				<DetailField label="Origem" value={lead.source} />
+				{lead.referredBy && (
+					<DetailField className="col-span-2" label="Indicado por (parceiro)">
+						<Link
+							component={RouterLink}
+							to={`/leads/${lead.referredBy.id}`}
+							underline="hover"
+							data-cy="lead-referred-by"
+						>
+							{lead.referredBy.companyName ?? lead.referredBy.name}
+						</Link>
+					</DetailField>
+				)}
 				<DetailField label="Conversões" value={fromRd ? lead.conversionCount : null} />
 				<DetailField className="col-span-2" label="Conversão" value={lead.conversionIdentifier} />
 				<DetailField label="UTM source" value={lead.utmSource} />

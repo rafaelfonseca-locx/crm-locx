@@ -48,13 +48,13 @@ usersRouter.get("/", async (req, res) => {
 		},
 	});
 	const [openByOwner, trialsByOwner, wonByOwner] = await Promise.all([
-		prisma.lead.groupBy({ by: ["ownerId"], where: { status: "OPEN" }, _count: { _all: true } }),
+		prisma.lead.groupBy({ by: ["ownerId"], where: { kind: "PROSPECT", status: "OPEN" }, _count: { _all: true } }),
 		prisma.lead.groupBy({
 			by: ["ownerId"],
-			where: { status: "OPEN", trial: { status: "ACTIVE" } },
+			where: { kind: "PROSPECT", status: "OPEN", trial: { status: "ACTIVE" } },
 			_count: { _all: true },
 		}),
-		prisma.lead.groupBy({ by: ["ownerId"], where: { status: "WON" }, _count: { _all: true } }),
+		prisma.lead.groupBy({ by: ["ownerId"], where: { kind: "PROSPECT", status: "WON" }, _count: { _all: true } }),
 	]);
 	const countFor = (rows: { ownerId: string | null; _count: { _all: number } }[], id: string) =>
 		rows.find((r) => r.ownerId === id)?._count._all ?? 0;

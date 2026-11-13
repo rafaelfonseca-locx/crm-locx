@@ -12,6 +12,8 @@ export const { useGetUsersQuery, useCreateUserMutation, useUpdateUserMutation } 
 export const {
 	useGetLeadsQuery,
 	useGetLeadSourcesQuery,
+	useGetPartnersQuery,
+	useSetLeadKindMutation,
 	useGetLeadByIdQuery,
 	useGetLeadHistoryQuery,
 	useCreateLeadMutation,

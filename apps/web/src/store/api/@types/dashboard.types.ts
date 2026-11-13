@@ -19,6 +19,17 @@ export type Dashboard = {
 		pipelineValue: number;
 	};
 	funnel: { stage: LeadStage | "WON"; count: number }[];
+	wonDeals: {
+		id: number;
+		name: string;
+		companyName: string | null;
+		plan: string | null;
+		billingCycle: "MONTHLY" | "ANNUAL" | null;
+		value: number | null;
+		wonAt: string;
+		closedBy: UserSummary | null;
+		cycleDays: number | null;
+	}[];
 	pipeline: { stage: LeadStage; count: number; value: number }[];
 	sources: { source: string; count: number; won: number }[];
 	channels: { channel: LeadChannel; count: number; won: number }[];

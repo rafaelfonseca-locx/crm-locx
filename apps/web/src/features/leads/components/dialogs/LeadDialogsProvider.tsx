@@ -10,7 +10,7 @@ import { ScheduleMeetingDialog } from "./ScheduleMeetingDialog";
 import { StartTrialDialog } from "./StartTrialDialog";
 
 type DialogState =
-	| { kind: "create"; stage?: LeadStage }
+	| { kind: "create"; stage?: LeadStage; referredById?: number }
 	| { kind: "edit"; lead: Lead }
 	| { kind: "meeting"; lead: Lead; fromStageChange?: boolean }
 	| { kind: "trial"; lead: Lead }
@@ -21,6 +21,8 @@ type DialogState =
 type LeadDialogsContextValue = {
 	openCreateLead: () => void;
 	openCreateLeadInStage: (stage: LeadStage) => void;
+	/** Nova indicação de um parceiro */
+	openCreateReferral: (partnerId: number) => void;
 	openEditLead: (lead: Lead) => void;
 	openScheduleMeeting: (lead: Lead) => void;
 	openStartTrial: (lead: Lead) => void;
@@ -64,6 +66,7 @@ export function LeadDialogsProvider({ children }: { children: ReactNode }) {
 		() => ({
 			openCreateLead: () => setState({ kind: "create" }),
 			openCreateLeadInStage: (stage) => setState({ kind: "create", stage }),
+			openCreateReferral: (partnerId) => setState({ kind: "create", referredById: partnerId }),
 			openEditLead: (lead) => setState({ kind: "edit", lead }),
 			openScheduleMeeting: (lead) => setState({ kind: "meeting", lead }),
 			openStartTrial: (lead) => setState({ kind: "trial", lead }),
@@ -83,6 +86,7 @@ export function LeadDialogsProvider({ children }: { children: ReactNode }) {
 				open={state?.kind === "create" || state?.kind === "edit"}
 				lead={state?.kind === "edit" ? state.lead : null}
 				defaultStage={state?.kind === "create" ? state.stage : undefined}
+				defaultReferredById={state?.kind === "create" ? state.referredById : undefined}
 				onClose={close}
 				onSaved={(saved) => state?.kind === "create" && navigate(`/leads/${saved.id}`)}
 			/>

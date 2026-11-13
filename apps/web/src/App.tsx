@@ -10,6 +10,7 @@ import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { LeadDetailsPage } from "./pages/LeadDetailsPage";
 import { LeadsListingPage } from "./pages/LeadsListingPage";
 import { LoginPage } from "./pages/LoginPage";
+import { PartnersPage } from "./pages/PartnersPage";
 import { PipelinePage } from "./pages/PipelinePage";
 import { TeamPage } from "./pages/TeamPage";
 import { TrialsPage } from "./pages/TrialsPage";
@@ -34,6 +35,7 @@ export function App() {
 						<Route path="leads/:id" element={<LeadDetailsPage />} />
 						<Route path="trials" element={<TrialsPage />} />
 						<Route path="agenda" element={<AgendaPage />} />
+						<Route path="parceiros" element={<PartnersPage />} />
 						<Route path="equipe" element={<TeamPage />} />
 						<Route path="integracoes" element={<IntegrationsPage />} />
 						<Route path="*" element={<Navigate to="/" replace />} />

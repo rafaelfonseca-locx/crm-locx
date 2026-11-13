@@ -99,6 +99,7 @@ type LeadForRd = {
 	email: string | null;
 	stage: string;
 	status: string;
+	kind?: string;
 	estimatedValue: Prisma.Decimal | number | null;
 	lostReason: string | null;
 	owner: { email: string } | null;
@@ -125,12 +126,14 @@ export async function syncLeadToRd(leadId: number) {
 			email: true,
 			stage: true,
 			status: true,
+			kind: true,
 			estimatedValue: true,
 			lostReason: true,
 			owner: { select: { email: true } },
 		},
 	})) as LeadForRd | null;
-	if (!lead?.email) return;
+	// Parceiro não é venda: não mexe no funil do RD
+	if (!lead?.email || lead.kind === "PARTNER") return;
 	const identifier = encodeURIComponent(`email:${lead.email}`);
 	const funnel = rdFunnelFor(lead);
 

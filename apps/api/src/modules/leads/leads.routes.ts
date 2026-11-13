@@ -6,6 +6,7 @@ import { isManager } from "../../middlewares/auth.js";
 import { notifySafely } from "../notifications/notifications.service.js";
 import { leadDetailInclude, leadListInclude, serializeLead, userSummarySelect } from "./leads.include.js";
 import {
+	kindSchema,
 	leadBodySchema,
 	leadListQuerySchema,
 	leadUpdateSchema,
@@ -44,6 +45,8 @@ leadsRouter.get("/", async (req, res) => {
 	const where: Prisma.LeadWhereInput = {};
 
 	if (q.status !== "ALL") where.status = q.status;
+	if (q.kind !== "ALL") where.kind = q.kind;
+	if (q.referredById) where.referredById = q.referredById;
 	if (q.stage) where.stage = q.stage;
 	if (q.source) where.source = q.source;
 	if (q.channel) where.channel = q.channel;
@@ -87,8 +90,57 @@ leadsRouter.get("/sources", async (_req, res) => {
 	);
 });
 
+/** Só um parceiro pode constar como "indicado por". */
+async function assertPartner(referredById: number | null | undefined, leadId?: number) {
+	if (!referredById) return;
+	if (referredById === leadId) throw new HttpError(400, "Um lead não pode indicar a si mesmo");
+	const partner = await prisma.lead.findUnique({ where: { id: referredById }, select: { kind: true } });
+	if (partner?.kind !== "PARTNER") throw new HttpError(400, 'Selecione um parceiro válido em "Indicado por"');
+}
+
+// Parceiros com o resultado das indicações
+leadsRouter.get("/partners", async (_req, res) => {
+	const [partners, referrals] = await Promise.all([
+		prisma.lead.findMany({
+			where: { kind: "PARTNER" },
+			include: { owner: { select: userSummarySelect } },
+			orderBy: [{ companyName: "asc" }, { name: "asc" }],
+		}),
+		prisma.lead.findMany({
+			where: { referredById: { not: null } },
+			select: { referredById: true, status: true, estimatedValue: true, createdAt: true },
+		}),
+	]);
+	return ok(
+		res,
+		partners.map((partner) => {
+			const mine = referrals.filter((r) => r.referredById === partner.id);
+			const won = mine.filter((r) => r.status === "WON");
+			return {
+				id: partner.id,
+				name: partner.name,
+				companyName: partner.companyName,
+				email: partner.email,
+				phone: partner.phone,
+				owner: partner.owner,
+				createdAt: partner.createdAt,
+				stats: {
+					referrals: mine.length,
+					open: mine.filter((r) => r.status === "OPEN").length,
+					won: won.length,
+					lost: mine.filter((r) => r.status === "LOST").length,
+					wonValue: won.reduce((acc, r) => acc + Number(r.estimatedValue ?? 0), 0),
+					lastReferralAt: mine.reduce<Date | null>((acc, r) => (!acc || r.createdAt > acc ? r.createdAt : acc), null),
+				},
+			};
+		}),
+		partners.length,
+	);
+});
+
 leadsRouter.post("/", async (req, res) => {
 	const body = parse(leadBodySchema, req.body);
+	await assertPartner(body.referredById);
 	const ownerId = body.ownerId === undefined ? req.user.id : body.ownerId;
 	const stage = body.stage ?? "NEW";
 	const lead = await prisma.$transaction(async (tx) => {
@@ -122,6 +174,7 @@ leadsRouter.patch("/:id", async (req, res) => {
 	const id = leadIdParam(req.params.id);
 	const body = parse(leadUpdateSchema, req.body);
 	const { stage, ...data } = body;
+	await assertPartner(data.referredById, id);
 	if (stage) await moveStage(id, stage, req.user.id);
 	await prisma.lead.update({ where: { id }, data });
 	return ok(res, await loadLead(id));
@@ -156,6 +209,37 @@ leadsRouter.post("/:id/lose", async (req, res) => {
 leadsRouter.post("/:id/reopen", async (req, res) => {
 	const id = leadIdParam(req.params.id);
 	await reopen(id, req.user.id);
+	return ok(res, await loadLead(id));
+});
+
+// Parceiro (vende por nós e indica clientes) ou cliente em potencial (passa pelo funil)
+leadsRouter.post("/:id/kind", async (req, res) => {
+	const id = leadIdParam(req.params.id);
+	const { kind } = parse(kindSchema, req.body);
+	const lead = await prisma.lead.findUnique({
+		where: { id },
+		select: { kind: true, _count: { select: { referrals: true } } },
+	});
+	if (!lead) throw notFound("Lead");
+	if (lead.kind === kind) return ok(res, await loadLead(id));
+	if (kind === "PROSPECT" && lead._count.referrals > 0) {
+		throw new HttpError(409, "Este parceiro tem indicações. Remova o vínculo das indicações antes de mudar.");
+	}
+	await prisma.$transaction([
+		prisma.lead.update({
+			where: { id },
+			// Parceiro não é indicado por outro parceiro
+			data: kind === "PARTNER" ? { kind, referredById: null } : { kind },
+		}),
+		prisma.activity.create({
+			data: {
+				leadId: id,
+				type: "SYSTEM",
+				title: kind === "PARTNER" ? "Marcado como parceiro" : "Voltou a ser cliente em potencial",
+				authorId: req.user.id,
+			},
+		}),
+	]);
 	return ok(res, await loadLead(id));
 });
 

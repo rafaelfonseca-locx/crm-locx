@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { contractsBucket, mapStage, parseFullDate, parsePlan, parseShortDate } from "./import-handoff.js";
+import {
+	contractsBucket,
+	isPartnerLead,
+	mapStage,
+	parseFullDate,
+	parsePlan,
+	parseShortDate,
+} from "./import-handoff.js";
 
 describe("importação do Handoff RE Patrimonial", () => {
 	it("lê o plano e o ciclo", () => {
@@ -42,5 +49,13 @@ describe("importação do Handoff RE Patrimonial", () => {
 		const arrival = parseFullDate("20/11/2025");
 		expect(parseShortDate("05/01", arrival)?.toISOString().slice(0, 10)).toBe("2026-01-05");
 		expect(parseShortDate("25/11", arrival)?.toISOString().slice(0, 10)).toBe("2025-11-25");
+	});
+
+	it("reconhece parceiros (vendem por nós)", () => {
+		const lead = (resumo: string) => ({ resumo, tempo: [] as [string, string][] });
+		expect(isPartnerLead(lead("Esse cliente atuará como um parceiro, trazendo outros clientes."))).toBe(true);
+		expect(isPartnerLead(lead("Ele é parceiro da LocX"))).toBe(true);
+		expect(isPartnerLead(lead("Se posicionou mais como parceiro na conversa"))).toBe(false);
+		expect(isPartnerLead(lead("Quer integrar com parceiros"))).toBe(false);
 	});
 });

@@ -9,7 +9,7 @@ import Button from "@mui/material/Button";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import { AlarmClockOff, CalendarClock, CircleAlert, Clock, Flame, Snowflake, Sun } from "lucide-react";
+import { AlarmClockOff, CalendarClock, CircleAlert, Clock, Flame, Handshake, Snowflake, Sun } from "lucide-react";
 import type { CSSProperties } from "react";
 import { ROTTING_DAYS } from "../rotting";
 
@@ -115,6 +115,19 @@ export function LeadCard({ lead, isDragging, isOverlay, onClaim, style }: LeadCa
 			{subtitle && (
 				<Typography variant="caption" color="text.secondary" noWrap component="div" className="mt-0.5">
 					{subtitle}
+				</Typography>
+			)}
+
+			{lead.referredBy && (
+				<Typography
+					variant="caption"
+					color="text.secondary"
+					noWrap
+					component="div"
+					className="mt-0.5 flex items-center gap-1"
+				>
+					<Handshake size={12} strokeWidth={1.75} aria-hidden />
+					via {lead.referredBy.companyName ?? lead.referredBy.name}
 				</Typography>
 			)}
 

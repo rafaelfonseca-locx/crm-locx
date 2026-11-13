@@ -1,4 +1,14 @@
-import { CalendarClock, FlaskConical, Gauge, KanbanSquare, type LucideIcon, Plug, Rows3, Users } from "lucide-react";
+import {
+	CalendarClock,
+	FlaskConical,
+	Gauge,
+	Handshake,
+	KanbanSquare,
+	type LucideIcon,
+	Plug,
+	Rows3,
+	Users,
+} from "lucide-react";
 
 export type NavItem = { id: string; label: string; to: string; icon: LucideIcon; managerOnly?: boolean };
 export type NavSection = { title: string; items: NavItem[] };
@@ -12,6 +22,7 @@ export const NAVIGATION: NavSection[] = [
 			{ id: "leads", label: "Leads", to: "/leads", icon: Rows3 },
 			{ id: "trials", label: "Trials", to: "/trials", icon: FlaskConical },
 			{ id: "agenda", label: "Agenda", to: "/agenda", icon: CalendarClock },
+			{ id: "partners", label: "Parceiros", to: "/parceiros", icon: Handshake },
 		],
 	},
 	{

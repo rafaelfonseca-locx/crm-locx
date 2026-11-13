@@ -4,7 +4,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StageChip } from "@/components/ui/StageChip";
 import { ActivityComposer } from "@/features/leads/components/details/ActivityComposer";
 import { ActivityTimeline, UpcomingActivities } from "@/features/leads/components/details/ActivityTimeline";
-import { CompanyCard, ContactCard, OpportunityCard, OriginCard } from "@/features/leads/components/details/InfoCards";
+import {
+	ContactCard,
+	OpportunityCard,
+	OriginCard,
+	QualificationCard,
+} from "@/features/leads/components/details/InfoCards";
 import { StageHistory } from "@/features/leads/components/details/StageHistory";
 import { StagePath } from "@/features/leads/components/details/StagePath";
 import { TeamCard } from "@/features/leads/components/details/TeamCard";
@@ -303,9 +308,9 @@ export function LeadDetailsPage() {
 					</div>
 					<aside className="lg:col-span-4 space-y-4">
 						<TeamCard lead={lead} />
+						<QualificationCard lead={lead} onEdit={() => dialogs.openEditLead(lead)} />
 						<ContactCard lead={lead} onEdit={() => dialogs.openEditLead(lead)} />
 						<OpportunityCard lead={lead} />
-						<CompanyCard lead={lead} />
 						<OriginCard lead={lead} />
 					</aside>
 				</div>

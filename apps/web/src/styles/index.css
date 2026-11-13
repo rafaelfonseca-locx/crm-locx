@@ -52,3 +52,11 @@
 .scrollbar-thin {
 	scrollbar-width: thin;
 }
+
+/* Rolagem sem barra visível (o Kanban rola com a roda do mouse ou o trackpad) */
+.scrollbar-none {
+	scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+	display: none;
+}

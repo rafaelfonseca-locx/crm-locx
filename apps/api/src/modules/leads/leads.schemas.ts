@@ -3,6 +3,7 @@ import { z } from "zod";
 export const STAGES = ["NEW", "QUALIFICATION", "MEETING", "TRIAL", "CLOSING"] as const;
 export const STATUSES = ["OPEN", "WON", "LOST"] as const;
 export const TEMPERATURES = ["COLD", "WARM", "HOT"] as const;
+export const CHANNELS = ["DEMO", "WHATSAPP", "SITE", "MANUAL"] as const;
 export const PARTICIPANT_ROLES = ["SDR", "CLOSER", "ONBOARDING", "TECHNICAL", "OBSERVER"] as const;
 
 const optionalText = (max: number) =>
@@ -33,7 +34,14 @@ export const leadBodySchema = z.object({
 	temperature: z.enum(TEMPERATURES).nullish(),
 	estimatedValue: z.coerce.number().min(0, "O valor deve ser positivo").nullish(),
 	plan: optionalText(60),
+	billingCycle: z.enum(["MONTHLY", "ANNUAL"]).nullish(),
 	notes: optionalText(2000),
+	channel: z.enum(CHANNELS).optional(),
+	businessType: optionalText(120),
+	managementRole: optionalText(120),
+	contractsRange: optionalText(120),
+	currentTool: optionalText(120),
+	startTimeline: optionalText(120),
 	tags: z.array(z.string().trim().min(1).max(30)).max(20).optional(),
 	source: z.string().trim().max(60).optional(),
 	utmSource: optionalText(120),
@@ -52,6 +60,7 @@ export const leadListQuerySchema = z.object({
 	ownerId: z.string().optional(),
 	mine: z.enum(["true", "false"]).optional(),
 	source: z.string().optional(),
+	channel: z.enum(CHANNELS).optional(),
 	temperature: z.enum(TEMPERATURES).optional(),
 	skip: z.coerce.number().int().min(0).default(0),
 	take: z.coerce.number().int().min(1).max(1000).default(50),
@@ -66,6 +75,7 @@ export const moveStageSchema = z.object({ stage: z.enum(STAGES) });
 export const winSchema = z.object({
 	estimatedValue: z.coerce.number().min(0).nullish(),
 	plan: optionalText(60),
+	billingCycle: z.enum(["MONTHLY", "ANNUAL"]).nullish(),
 	note: optionalText(2000),
 });
 

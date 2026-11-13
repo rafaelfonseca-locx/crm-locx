@@ -3,7 +3,7 @@ import { PageActions, PageHeader, PageSimple, PageTitle } from "@/components/lay
 import { EmptyState } from "@/components/ui/EmptyState";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HorizontalBars, KpiTile, Panel, useSeriesColor } from "@/features/dashboard/components";
-import { STAGE_META } from "@/features/leads/constants";
+import { CHANNEL_META, STAGE_META } from "@/features/leads/constants";
 import { trialDaysLeftLabel } from "@/features/trials/trialProgress";
 import { useAuth } from "@/hooks/useAuth";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -98,6 +98,7 @@ function FunnelPanel({ data }: { data: Dashboard }) {
 	return (
 		<Panel
 			title="Funil de conversão"
+			info="Dos leads que entraram no período, quantos chegaram a cada etapa. A porcentagem à direita é a conversão a partir da etapa anterior."
 			subtitle={`Leads que entraram nos últimos ${data.period.days} dias e até onde chegaram`}
 		>
 			{first === 0 ? (
@@ -143,6 +144,7 @@ function PipelinePanel({ data }: { data: Dashboard }) {
 	return (
 		<Panel
 			title="Pipeline atual"
+			info="Todos os leads em aberto agora, por etapa, com o valor mensal estimado."
 			subtitle={`${data.kpis.openLeads} leads em aberto · ${formatCurrency(data.kpis.pipelineValue)}/mês estimado`}
 			action={
 				<Typography
@@ -221,20 +223,24 @@ function LeadsPerDayPanel({ data }: { data: Dashboard }) {
 	);
 }
 
-function SourcesPanel({ data }: { data: Dashboard }) {
+function ChannelsPanel({ data }: { data: Dashboard }) {
 	return (
-		<Panel title="Origem dos leads" subtitle="Leads do período e quantos viraram venda">
-			{data.sources.length === 0 ? (
+		<Panel
+			title="Canal de entrada"
+			subtitle="Leads do período e quantos viraram venda"
+			info="Demonstração = agendou pelo Cal.com. WhatsApp e Site = formulários curtos, que precisam de pré-atendimento."
+		>
+			{data.channels.length === 0 ? (
 				<EmptyState compact />
 			) : (
 				<HorizontalBars
 					labelWidth={110}
-					rows={data.sources.slice(0, 6).map((s) => ({
-						key: s.source,
-						label: s.source,
+					rows={data.channels.map((s) => ({
+						key: s.channel,
+						label: CHANNEL_META[s.channel].short,
 						value: s.count,
 						display: String(s.count),
-						tooltip: `${s.source}: ${s.count} leads, ${s.won} vendas`,
+						tooltip: `${CHANNEL_META[s.channel].label}: ${s.count} leads, ${s.won} vendas`,
 						aside: (
 							<Typography variant="caption" color="text.secondary" className="tabular-nums">
 								{s.won} {s.won === 1 ? "venda" : "vendas"}
@@ -249,12 +255,16 @@ function SourcesPanel({ data }: { data: Dashboard }) {
 
 function TeamPanel({ data }: { data: Dashboard }) {
 	return (
-		<Panel title="Desempenho do time" subtitle={`Vendas nos últimos ${data.period.days} dias e carteira atual`}>
+		<Panel
+			title="Desempenho do time"
+			info="Vendas e receita do período; leads em aberto e trials ativos são a carteira atual de cada pessoa."
+			subtitle={`Vendas nos últimos ${data.period.days} dias e carteira atual`}
+		>
 			<div className="overflow-x-auto">
 				<table className="w-full text-[13px]">
 					<thead>
 						<tr className="text-left border-b">
-							{["Comercial", "Em aberto", "Reuniões", "Trials", "Vendas", "Receita nova"].map((h, i) => (
+							{["Vendedor", "Em aberto", "Reuniões", "Trials", "Vendas", "Receita nova"].map((h, i) => (
 								<Typography
 									key={h}
 									component="th"
@@ -269,21 +279,23 @@ function TeamPanel({ data }: { data: Dashboard }) {
 						</tr>
 					</thead>
 					<tbody>
-						{data.team.map((row) => (
-							<tr key={row.user.id} className="border-b last:border-b-0">
-								<td className="py-2.5">
-									<div className="flex items-center gap-2">
-										<UserAvatar user={row.user} size={26} tooltip={false} />
-										<span className="font-medium truncate">{row.user.name}</span>
-									</div>
-								</td>
-								<td className="text-right px-2 tabular-nums">{row.openLeads}</td>
-								<td className="text-right px-2 tabular-nums">{row.meetings}</td>
-								<td className="text-right px-2 tabular-nums">{row.activeTrials}</td>
-								<td className="text-right px-2 tabular-nums font-semibold">{row.won}</td>
-								<td className="text-right px-2 tabular-nums font-semibold">{formatCurrency(row.wonValue)}</td>
-							</tr>
-						))}
+						{data.team
+							.filter((row) => row.user.role === "SALES" || row.openLeads > 0 || row.won > 0)
+							.map((row) => (
+								<tr key={row.user.id} className="border-b last:border-b-0">
+									<td className="py-2.5">
+										<div className="flex items-center gap-2">
+											<UserAvatar user={row.user} size={26} tooltip={false} />
+											<span className="font-medium truncate">{row.user.name}</span>
+										</div>
+									</td>
+									<td className="text-right px-2 tabular-nums">{row.openLeads}</td>
+									<td className="text-right px-2 tabular-nums">{row.meetings}</td>
+									<td className="text-right px-2 tabular-nums">{row.activeTrials}</td>
+									<td className="text-right px-2 tabular-nums font-semibold">{row.won}</td>
+									<td className="text-right px-2 tabular-nums font-semibold">{formatCurrency(row.wonValue)}</td>
+								</tr>
+							))}
 					</tbody>
 				</table>
 			</div>
@@ -425,41 +437,48 @@ export function DashboardPage() {
 						<div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
 							<KpiTile
 								label="Novos leads"
+								info="Leads que entraram no período, comparado com o período anterior de mesmo tamanho."
 								value={String(k.newLeads)}
 								delta={delta}
-								hint="vs. período anterior"
+								hint="vs. anterior"
 								icon={<Inbox size={16} strokeWidth={1.5} />}
 							/>
 							<KpiTile
-								label="Reuniões agendadas"
+								label="Reuniões"
+								info="Reuniões (demonstrações) criadas no período, pelo time ou pelo Cal.com."
 								value={String(k.meetings)}
 								icon={<CalendarCheck size={16} strokeWidth={1.5} />}
 							/>
 							<KpiTile
-								label="Trials iniciados"
+								label="Trials"
+								info="Testes gratuitos de 5 a 7 dias iniciados no período."
 								value={String(k.trialsStarted)}
 								hint={`${k.activeTrials} ativos agora`}
 								icon={<FlaskConical size={16} strokeWidth={1.5} />}
 							/>
 							<KpiTile
 								label="Vendas"
+								info="Leads marcados como Ganho no período."
 								value={String(k.won)}
 								hint={`${k.lost} perdidos`}
 								icon={<Trophy size={16} strokeWidth={1.5} />}
 							/>
 							<KpiTile
-								label="Receita nova (MRR)"
+								label="MRR novo"
+								info="Soma do valor mensal das vendas do período. Planos anuais contam pelo valor mensal com desconto."
 								value={formatCurrency(k.wonValue)}
 								icon={<CircleDollarSign size={16} strokeWidth={1.5} />}
 							/>
 							<KpiTile
 								label="Taxa de ganho"
+								info="Das oportunidades encerradas no período, quantas foram ganhas (ganhos ÷ ganhos + perdidos)."
 								value={formatPercent(k.winRate)}
-								hint="ganhos ÷ encerrados"
+								hint="dos encerrados"
 								icon={<Percent size={16} strokeWidth={1.5} />}
 							/>
 							<KpiTile
-								label="Ciclo médio de venda"
+								label="Ciclo de venda"
+								info="Tempo médio entre a chegada do lead e a venda, nas vendas do período."
 								value={k.avgCycleDays === null ? "N/A" : `${Math.round(k.avgCycleDays)} dias`}
 								icon={<Hourglass size={16} strokeWidth={1.5} />}
 							/>
@@ -475,7 +494,7 @@ export function DashboardPage() {
 								<LeadsPerDayPanel data={dashboard} />
 							</div>
 							<div className="lg:col-span-5">
-								<SourcesPanel data={dashboard} />
+								<ChannelsPanel data={dashboard} />
 							</div>
 							<div className="lg:col-span-7">
 								<TeamPanel data={dashboard} />

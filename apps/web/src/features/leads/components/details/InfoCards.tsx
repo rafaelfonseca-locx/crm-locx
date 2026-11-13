@@ -1,3 +1,4 @@
+import { InfoTip } from "@/components/ui/InfoTip";
 import { useNotify } from "@/hooks/useNotify";
 import type { Lead } from "@/store/api/@types/lead.types";
 import { formatCurrency, formatDateTime, whatsappLink } from "@/utils/formatters";
@@ -10,15 +11,24 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { Copy, ExternalLink, Mail, MessageCircle, Pencil, Phone } from "lucide-react";
 import type { ReactNode } from "react";
-import { TEMPERATURE_META } from "../../constants";
+import { BILLING_CYCLE_LABELS, CHANNEL_META, QUALIFICATION_LABELS, TEMPERATURE_META } from "../../constants";
+import { ChannelIcon } from "../ChannelIcon";
 
-export function InfoCard({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
+export function InfoCard({
+	title,
+	children,
+	action,
+	info,
+}: { title: string; children: ReactNode; action?: ReactNode; info?: string }) {
 	return (
 		<Paper className="rounded-xl p-4 space-y-3" sx={{ border: 1, borderColor: "divider" }}>
 			<div className="flex items-center justify-between gap-2 min-h-7">
-				<Typography variant="subtitle2" className="font-bold">
-					{title}
-				</Typography>
+				<div className="flex items-center gap-1.5">
+					<Typography variant="subtitle2" className="font-bold">
+						{title}
+					</Typography>
+					{info && <InfoTip title={info} />}
+				</div>
 				{action}
 			</div>
 			{children}
@@ -32,12 +42,14 @@ export function DetailField({
 	value,
 	children,
 	className,
-}: { label: string; value?: ReactNode; children?: ReactNode; className?: string }) {
+	hint,
+}: { label: string; value?: ReactNode; children?: ReactNode; className?: string; hint?: string }) {
 	const content = children ?? value;
 	return (
 		<div className={className}>
-			<Typography variant="caption" color="text.secondary" component="div">
+			<Typography variant="caption" color="text.secondary" component="div" className="flex items-center gap-1">
 				{label}
+				{hint && <InfoTip title={hint} size={12} />}
 			</Typography>
 			<Typography variant="body2" fontWeight={500} component="div" className="break-words">
 				{content === null || content === undefined || content === "" ? (
@@ -156,13 +168,23 @@ export function CompanyCard({ lead }: { lead: Lead }) {
 
 export function OpportunityCard({ lead }: { lead: Lead }) {
 	return (
-		<InfoCard title="Oportunidade">
+		<InfoCard title="Oportunidade" info="Valores mensais. No plano anual, é o valor por mês com o desconto de 20%.">
 			<div className="grid grid-cols-2 gap-3">
 				<DetailField label={lead.status === "WON" ? "Valor mensal fechado" : "Valor mensal estimado"}>
 					{lead.estimatedValue !== null && <span className="tabular-nums">{formatCurrency(lead.estimatedValue)}</span>}
 				</DetailField>
-				<DetailField label="Plano" value={lead.plan} />
-				<DetailField label="Temperatura">
+				<DetailField
+					label="Plano"
+					value={
+						lead.plan
+							? `${lead.plan}${lead.billingCycle ? ` · ${BILLING_CYCLE_LABELS[lead.billingCycle].toLowerCase()}` : ""}`
+							: null
+					}
+				/>
+				<DetailField
+					label="Temperatura"
+					hint="Quente: quer começar em até 30 dias. Morno: em até 3 meses. Frio: sem prazo ou só pesquisando."
+				>
 					{lead.temperature && (
 						<Chip
 							size="small"
@@ -200,6 +222,7 @@ export function OriginCard({ lead }: { lead: Lead }) {
 	return (
 		<InfoCard
 			title="Origem"
+			info="De onde o lead veio. Os dados de campanha (UTM) chegam do RD Station."
 			action={
 				fromRd && lead.rdPublicUrl ? (
 					<Link
@@ -216,13 +239,65 @@ export function OriginCard({ lead }: { lead: Lead }) {
 			}
 		>
 			<div className="grid grid-cols-2 gap-3">
-				<DetailField label="Canal" value={lead.source} />
+				<DetailField label="Canal de entrada" hint={CHANNEL_META[lead.channel].description}>
+					<span className="inline-flex items-center gap-1.5">
+						<ChannelIcon channel={lead.channel} />
+						{CHANNEL_META[lead.channel].short}
+					</span>
+				</DetailField>
+				<DetailField label="Origem" value={lead.source} />
 				<DetailField label="Conversões" value={fromRd ? lead.conversionCount : null} />
 				<DetailField className="col-span-2" label="Conversão" value={lead.conversionIdentifier} />
 				<DetailField label="UTM source" value={lead.utmSource} />
 				<DetailField label="UTM medium" value={lead.utmMedium} />
 				<DetailField className="col-span-2" label="UTM campaign" value={lead.utmCampaign} />
 			</div>
+		</InfoCard>
+	);
+}
+
+/** Respostas das perguntas padronizadas dos formulários. */
+export function QualificationCard({ lead, onEdit }: { lead: Lead; onEdit: () => void }) {
+	const fields = ["businessType", "contractsRange", "managementRole", "currentTool", "startTimeline"] as const;
+	const answered = fields.filter((f) => lead[f]).length;
+	return (
+		<InfoCard
+			title="Qualificação"
+			info="Respostas do formulário do site, do WhatsApp ou do agendamento. Complete no pré-atendimento o que faltar."
+			action={
+				<Typography
+					variant="caption"
+					color={answered === fields.length ? "success.main" : "text.secondary"}
+					fontWeight={600}
+				>
+					{answered}/{fields.length}
+				</Typography>
+			}
+		>
+			<div className="grid grid-cols-2 gap-3">
+				{fields.map((field) => (
+					<DetailField
+						key={field}
+						label={QUALIFICATION_LABELS[field]}
+						value={lead[field]}
+						className={field === "startTimeline" ? "col-span-2" : undefined}
+					/>
+				))}
+				<DetailField label="Estado" value={lead.state} />
+				<DetailField label="Cidade" value={lead.city} />
+			</div>
+			{answered < fields.length && (
+				<Typography
+					component="button"
+					type="button"
+					variant="caption"
+					onClick={onEdit}
+					className="font-semibold hover:underline"
+					sx={{ color: "info.main" }}
+				>
+					Completar qualificação
+				</Typography>
+			)}
 		</InfoCard>
 	);
 }

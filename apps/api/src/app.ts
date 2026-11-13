@@ -18,7 +18,15 @@ export function createApp() {
 	app.disable("x-powered-by");
 	app.use(helmet());
 	app.use(cors({ origin: env.WEB_ORIGIN.split(",").map((o) => o.trim()) }));
-	app.use(express.json({ limit: "1mb" }));
+	app.use(
+		express.json({
+			limit: "1mb",
+			// Corpo original, usado para validar a assinatura do webhook do Cal.com
+			verify: (req, _res, buf) => {
+				(req as express.Request).rawBody = buf;
+			},
+		}),
+	);
 	app.use(express.urlencoded({ extended: true }));
 	if (env.NODE_ENV !== "test") app.use(morgan("dev"));
 

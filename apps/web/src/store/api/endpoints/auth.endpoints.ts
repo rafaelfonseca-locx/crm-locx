@@ -13,7 +13,7 @@ export const authApi = apiService.injectEndpoints({
 		}),
 		updateMe: build.mutation<
 			ApiResponse<CurrentUser>,
-			{ name?: string; color?: string; currentPassword?: string; newPassword?: string }
+			{ name?: string; color?: string; currentPassword?: string; newPassword?: string; onboarded?: boolean }
 		>({
 			query: (body) => ({ url: "/auth/me", method: "PATCH", body }),
 			invalidatesTags: ["Me", "User"],

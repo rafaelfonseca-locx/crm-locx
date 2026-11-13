@@ -6,6 +6,7 @@ export const userSummarySelect = {
 	email: true,
 	color: true,
 	role: true,
+	avatarUrl: true,
 } satisfies Prisma.UserSelect;
 
 export const leadListInclude = {

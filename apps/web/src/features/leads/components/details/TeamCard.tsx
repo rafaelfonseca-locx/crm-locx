@@ -16,7 +16,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { UserPlus, X } from "lucide-react";
 import { useState } from "react";
-import { PARTICIPANT_ROLE_LABELS } from "../../constants";
+import { PARTICIPANT_ROLE_HINTS, PARTICIPANT_ROLE_LABELS } from "../../constants";
 import { InfoCard } from "./InfoCards";
 
 /** Responsável pelo lead + pessoas adicionadas ao processo (SDR, closer, técnico…). */
@@ -74,6 +74,7 @@ export function TeamCard({ lead }: { lead: Lead }) {
 	return (
 		<InfoCard
 			title="Equipe no processo"
+			info="O responsável conduz o lead. Adicione outras pessoas (SDR, closer, onboarding, técnico) para acompanharem junto. Elas também veem o lead em Meus leads."
 			action={
 				!isAddOpen && (
 					<Button
@@ -176,11 +177,17 @@ export function TeamCard({ lead }: { lead: Lead }) {
 						label="Papel"
 						value={newRole}
 						onChange={(e) => setNewRole(e.target.value as ParticipantRole)}
+						slotProps={{ select: { renderValue: (v) => PARTICIPANT_ROLE_LABELS[v as ParticipantRole] } }}
 						data-cy="participant-role"
 					>
 						{Object.entries(PARTICIPANT_ROLE_LABELS).map(([value, label]) => (
 							<MenuItem key={value} value={value}>
-								{label}
+								<div>
+									<div>{label}</div>
+									<Typography variant="caption" color="text.secondary">
+										{PARTICIPANT_ROLE_HINTS[value as ParticipantRole]}
+									</Typography>
+								</div>
 							</MenuItem>
 						))}
 					</TextField>

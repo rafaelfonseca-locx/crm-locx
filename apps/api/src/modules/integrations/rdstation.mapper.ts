@@ -9,7 +9,10 @@
  * o mapeamento aceita também um lead único ou campos "achatados" (`utm_source`, `conversion_identifier`…).
  */
 
-export type RdNormalizedLead = {
+import { type LeadChannelValue, type Qualification, detectChannel, extractQualification } from "./qualification.js";
+
+export type RdNormalizedLead = Qualification & {
+	channel: LeadChannelValue;
 	rdLeadId: string | null;
 	name: string;
 	email: string | null;
@@ -116,10 +119,24 @@ export function normalizeRdLead(raw: Dict): RdNormalizedLead {
 	const origin = pick(firstConversion, "conversion_origin") ?? pick(conversion, "conversion_origin");
 	const customFields = raw.custom_fields;
 	const email = str(raw.email);
+	const qualification = extractQualification([
+		...(isDict(customFields) ? Object.entries(customFields) : []),
+		...(isDict(pick(conversion, "content")) ? Object.entries(pick(conversion, "content") as Dict) : []),
+		...Object.entries(raw).filter(([key]) => /perfil|contrat|imove|papel|gerenc|pretende|quando|qualifica/i.test(key)),
+	]);
 	const tags = Array.isArray(raw.tags) ? raw.tags.map((t) => str(t)).filter((t): t is string => !!t) : [];
 	const conversionCount = Number(raw.number_conversions ?? raw.conversion_count ?? 1);
 
+	const conversionIdentifier = str(
+		pick(conversion, "content.identificador"),
+		pick(conversion, "content.conversion_identifier"),
+		raw.conversion_identifier,
+		pick(conversion, "source"),
+	);
+
 	return {
+		...qualification,
+		channel: detectChannel(conversionIdentifier),
 		rdLeadId: str(raw.uuid, raw.id),
 		name:
 			str(raw.name, pick(conversion, "content.nome"), pick(conversion, "content.name"), email?.split("@")[0]) ??
@@ -132,13 +149,8 @@ export function normalizeRdLead(raw: Dict): RdNormalizedLead {
 		segment: str(raw.segment, findCustomField(customFields, /segment|setor|ramo|nicho|industry/i)),
 		website: str(raw.website, raw.company_site),
 		city: str(raw.city),
-		state: toUf(str(raw.state, raw.uf)),
-		conversionIdentifier: str(
-			pick(conversion, "content.identificador"),
-			pick(conversion, "content.conversion_identifier"),
-			raw.conversion_identifier,
-			pick(conversion, "source"),
-		),
+		state: toUf(str(raw.state, raw.uf)) ?? toUf(qualification.state),
+		conversionIdentifier,
 		conversionCount: Number.isFinite(conversionCount) && conversionCount > 0 ? conversionCount : 1,
 		utmSource: str(pick(origin, "source"), raw.utm_source, raw.traffic_source),
 		utmMedium: str(pick(origin, "medium"), raw.utm_medium, raw.traffic_medium),

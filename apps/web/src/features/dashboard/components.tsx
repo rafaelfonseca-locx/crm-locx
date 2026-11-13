@@ -1,3 +1,4 @@
+import { InfoTip } from "@/components/ui/InfoTip";
 import { useIsDarkMode } from "@/hooks/useStageColor";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -6,9 +7,9 @@ import Typography from "@mui/material/Typography";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 
-/** Cor única para gráficos de uma série: marrom LocX no claro, amarelo LocX no escuro. */
+/** Cor única para gráficos de uma série: amarelo LocX (um tom mais fechado no claro, para contraste). Os valores sempre aparecem escritos. */
 export function useSeriesColor() {
-	return useIsDarkMode() ? "#FFCC00" : "#6B4F3E";
+	return useIsDarkMode() ? "#FFCC00" : "#F2B705";
 }
 
 export function Panel({
@@ -17,7 +18,8 @@ export function Panel({
 	action,
 	children,
 	className,
-}: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string }) {
+	info,
+}: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string; info?: string }) {
 	return (
 		<Paper
 			className={`rounded-xl p-4 flex flex-col gap-3 min-w-0 ${className ?? ""}`}
@@ -25,9 +27,12 @@ export function Panel({
 		>
 			<div className="flex items-start justify-between gap-2">
 				<div>
-					<Typography variant="subtitle2" className="font-bold">
-						{title}
-					</Typography>
+					<div className="flex items-center gap-1.5">
+						<Typography variant="subtitle2" className="font-bold">
+							{title}
+						</Typography>
+						{info && <InfoTip title={info} />}
+					</div>
 					{subtitle && (
 						<Typography variant="caption" color="text.secondary">
 							{subtitle}
@@ -41,17 +46,27 @@ export function Panel({
 	);
 }
 
-type KpiTileProps = { label: string; value: string; hint?: string; delta?: number | null; icon: ReactNode };
+type KpiTileProps = {
+	label: string;
+	value: string;
+	hint?: string;
+	delta?: number | null;
+	icon: ReactNode;
+	info?: string;
+};
 
 /** Indicador único: o número é o protagonista, sem gráfico. */
-export function KpiTile({ label, value, hint, delta, icon }: KpiTileProps) {
+export function KpiTile({ label, value, hint, delta, icon, info }: KpiTileProps) {
 	return (
 		<Paper className="rounded-xl p-4 flex flex-col gap-2 min-w-0" sx={{ border: 1, borderColor: "divider" }}>
 			<div className="flex items-center justify-between gap-2">
-				<Typography variant="caption" color="text.secondary" fontWeight={500} noWrap>
-					{label}
-				</Typography>
-				<Box className="opacity-60">{icon}</Box>
+				<div className="flex items-center gap-1 min-w-0">
+					<Typography variant="caption" color="text.secondary" fontWeight={500} noWrap>
+						{label}
+					</Typography>
+					{info && <InfoTip title={info} size={12} />}
+				</div>
+				<Box className="opacity-50">{icon}</Box>
 			</div>
 			<Typography className="text-2xl font-bold tabular-nums tracking-tight leading-none">{value}</Typography>
 			<div className="flex items-center gap-1.5 min-h-4">

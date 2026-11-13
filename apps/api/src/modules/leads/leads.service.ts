@@ -46,7 +46,7 @@ async function recordTransition(
 	});
 }
 
-export async function moveStage(leadId: number, stage: LeadStage, userId: string) {
+export async function moveStage(leadId: number, stage: LeadStage, userId: string | null) {
 	return prisma.$transaction(async (tx) => {
 		const lead = await getLeadOrFail(tx, leadId);
 		if (lead.status !== "OPEN") throw new HttpError(400, "Reabra o lead antes de mudar a etapa");
@@ -64,7 +64,12 @@ export async function moveStage(leadId: number, stage: LeadStage, userId: string
 
 export async function markAsWon(
 	leadId: number,
-	data: { estimatedValue?: number | null; plan?: string | null; note?: string | null },
+	data: {
+		estimatedValue?: number | null;
+		plan?: string | null;
+		billingCycle?: "MONTHLY" | "ANNUAL" | null;
+		note?: string | null;
+	},
 	userId: string,
 ) {
 	return prisma.$transaction(async (tx) => {
@@ -88,6 +93,7 @@ export async function markAsWon(
 					? { estimatedValue: data.estimatedValue }
 					: {}),
 				...(data.plan ? { plan: data.plan } : {}),
+				...(data.billingCycle ? { billingCycle: data.billingCycle } : {}),
 			},
 		});
 	});

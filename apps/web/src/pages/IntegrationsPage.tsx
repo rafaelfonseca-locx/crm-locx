@@ -1,11 +1,16 @@
 import { LoadingContent } from "@/components/feedback/LoadingContent";
 import { PageHeader, PageSimple, PageTitle } from "@/components/layout/Page";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { InfoTip } from "@/components/ui/InfoTip";
+import { CHANNEL_ICONS } from "@/features/leads/components/ChannelIcon";
+import { CHANNEL_META, QUALIFICATION_OPTIONS } from "@/features/leads/constants";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotify } from "@/hooks/useNotify";
 import type { RdIntegration } from "@/store/api/@types/dashboard.types";
+import type { LeadChannel } from "@/store/api/@types/lead.types";
 import {
 	useGetRdIntegrationQuery,
+	useSendCalTestBookingMutation,
 	useSendRdTestLeadMutation,
 	useUpdateAssignmentModeMutation,
 } from "@/store/api/hooks";
@@ -24,38 +29,149 @@ import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { CircleCheck, CircleX, Copy, Plug, RefreshCw, Send } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 const LOG_STATUS = {
 	PROCESSED: { label: "Lead criado", color: "success" as const, icon: CircleCheck },
-	UPDATED: { label: "Conversão registrada", color: "info" as const, icon: RefreshCw },
+	UPDATED: { label: "Lead atualizado", color: "info" as const, icon: RefreshCw },
 	ERROR: { label: "Erro", color: "error" as const, icon: CircleX },
 };
 
-const STEPS = [
-	"No RD Station Marketing, acesse Conta › Integrações › Webhooks.",
-	"Crie um webhook com o gatilho Conversão (opcionalmente filtrando pelos formulários de demonstração e teste grátis).",
-	"Cole a URL abaixo e salve. Cada nova conversão vira um lead em “Novo lead”, com origem, UTMs e conversão preenchidos.",
-	"Conversões de quem já está no CRM são registradas no histórico do lead, sem duplicar. Leads perdidos que convertem de novo são reabertos.",
+const BASIC_QUESTIONS = [
+	"Nome completo",
+	"E-mail corporativo",
+	"WhatsApp",
+	"Qual o seu perfil?",
+	"Quantos contratos de aluguel você administra?",
 ];
+const FULL_QUESTIONS = [
+	...BASIC_QUESTIONS,
+	"Estado",
+	"Qual seu papel na gestão dos imóveis?",
+	"Como você gerencia hoje?",
+	"Quando você pretende começar a usar um sistema?",
+];
+
+const CHANNELS: { channel: Exclude<LeadChannel, "MANUAL">; flow: string; questions: string[]; identifier: string }[] = [
+	{
+		channel: "DEMO",
+		flow: "Entra em Reunião, com data, horário e link do Cal.com. O vendedor da agenda vira o responsável.",
+		questions: FULL_QUESTIONS,
+		identifier: "agendar-demonstracao",
+	},
+	{
+		channel: "WHATSAPP",
+		flow: "Entra em Novo lead com a tarefa “Fazer o pré-atendimento pelo WhatsApp” em até 1 hora.",
+		questions: BASIC_QUESTIONS,
+		identifier: "formulario-whatsapp",
+	},
+	{
+		channel: "SITE",
+		flow: "Entra em Novo lead com a tarefa “Fazer o primeiro contato” em até 1 hora.",
+		questions: BASIC_QUESTIONS,
+		identifier: "formulario-site",
+	},
+];
+
+function CopyField({
+	label,
+	value,
+	helperText,
+	dataCy,
+}: { label: string; value: string; helperText: string; dataCy: string }) {
+	const notify = useNotify();
+	const copy = async () => {
+		try {
+			await navigator.clipboard.writeText(value);
+			notify.info("URL copiada");
+		} catch {
+			notify.info("Não foi possível copiar. Selecione e copie a URL manualmente");
+		}
+	};
+	return (
+		<TextField
+			label={label}
+			value={value}
+			helperText={helperText}
+			slotProps={{
+				htmlInput: { readOnly: true, "data-cy": dataCy },
+				input: {
+					endAdornment: (
+						<InputAdornment position="end">
+							<Tooltip title="Copiar URL">
+								<IconButton onClick={copy} edge="end" aria-label={`Copiar ${label}`}>
+									<Copy size={16} strokeWidth={1.75} />
+								</IconButton>
+							</Tooltip>
+						</InputAdornment>
+					),
+				},
+			}}
+		/>
+	);
+}
+
+function Steps({ items }: { items: ReactNode[] }) {
+	const keyed = items.map((content, position) => ({ id: `step-${position + 1}`, content }));
+	return (
+		<ol className="space-y-2">
+			{keyed.map(({ id, content }, i) => (
+				<li key={id} className="flex gap-3">
+					<Box
+						className="flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold shrink-0 mt-px"
+						sx={{ bgcolor: "primary.main", color: "#111" }}
+					>
+						{i + 1}
+					</Box>
+					<Typography variant="body2">{content}</Typography>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+function IntegrationCard({
+	logo,
+	title,
+	status,
+	children,
+}: { logo: ReactNode; title: string; status: { ok: boolean; text: string }; children: ReactNode }) {
+	return (
+		<Paper className="rounded-xl p-5 space-y-4" sx={{ border: 1, borderColor: "divider" }}>
+			<div className="flex items-start justify-between gap-3">
+				<div className="flex items-center gap-3">
+					{logo}
+					<div>
+						<Typography variant="subtitle1" className="font-bold leading-tight">
+							{title}
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							{status.text}
+						</Typography>
+					</div>
+				</div>
+				<Chip
+					size="small"
+					color={status.ok ? "success" : "default"}
+					variant="outlined"
+					icon={status.ok ? <CircleCheck size={14} strokeWidth={1.75} /> : undefined}
+					label={status.ok ? "Recebendo" : "Aguardando"}
+				/>
+			</div>
+			{children}
+		</Paper>
+	);
+}
 
 export function IntegrationsPage() {
 	const notify = useNotify();
 	const { isManager } = useAuth();
 	const { data, isLoading, refetch, isFetching } = useGetRdIntegrationQuery();
 	const [updateMode, { isLoading: isSavingMode }] = useUpdateAssignmentModeMutation();
-	const [sendTest, { isLoading: isSending }] = useSendRdTestLeadMutation();
+	const [sendRdTest, { isLoading: isSendingRd, originalArgs }] = useSendRdTestLeadMutation();
+	const [sendCalTest, { isLoading: isSendingCal }] = useSendCalTestBookingMutation();
 	const rd = data?.data;
-
-	const copyUrl = async () => {
-		if (!rd?.webhookUrl) return;
-		try {
-			await navigator.clipboard.writeText(rd.webhookUrl);
-			notify.info("URL do webhook copiada");
-		} catch {
-			notify.info("Não foi possível copiar. Selecione e copie a URL manualmente");
-		}
-	};
 
 	const handleMode = async (mode: RdIntegration["assignmentMode"]) => {
 		try {
@@ -66,10 +182,11 @@ export function IntegrationsPage() {
 		}
 	};
 
-	const handleTest = async () => {
+	const handleTest = async (channel: Exclude<LeadChannel, "MANUAL">) => {
 		try {
-			await sendTest().unwrap();
-			notify.success("Lead de teste recebido. Confira o pipeline");
+			if (channel === "DEMO") await sendCalTest().unwrap();
+			else await sendRdTest({ channel }).unwrap();
+			notify.success("Lead de teste recebido. Confira no pipeline");
 		} catch (error) {
 			notify.apiError(error);
 		}
@@ -82,7 +199,7 @@ export function IntegrationsPage() {
 					<PageTitle
 						title="Integrações"
 						icon={<Plug strokeWidth={1.5} size={16} />}
-						subInfo="Entrada automática de leads"
+						subInfo="Como os leads entram no CRM"
 					/>
 				</PageHeader>
 			}
@@ -90,105 +207,172 @@ export function IntegrationsPage() {
 				isLoading || !rd ? (
 					<LoadingContent />
 				) : (
-					<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-						<div className="lg:col-span-7 space-y-4">
-							<Paper className="rounded-xl p-5 space-y-5" sx={{ border: 1, borderColor: "divider" }}>
-								<div className="flex items-start justify-between gap-3">
-									<div className="flex items-center gap-3">
-										<Box
-											className="flex items-center justify-center w-11 h-11 rounded-lg font-black text-sm"
-											sx={{ bgcolor: "#1a1a2e", color: "#fff" }}
-											aria-hidden
+					<div className="space-y-6">
+						<section className="space-y-3">
+							<div className="flex items-center gap-1.5">
+								<Typography variant="subtitle1" className="font-bold">
+									Canais de entrada
+								</Typography>
+								<InfoTip title="O canal é identificado pelo identificador da conversão no RD (contém “agend” ou “demo” = demonstração; “whats” ou “wpp” = WhatsApp; o resto = site)." />
+							</div>
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+								{CHANNELS.map(({ channel, flow, questions, identifier }) => {
+									const Icon = CHANNEL_ICONS[channel];
+									const isSending =
+										channel === "DEMO" ? isSendingCal : isSendingRd && originalArgs?.channel === channel;
+									return (
+										<Paper
+											key={channel}
+											className="rounded-xl p-4 flex flex-col gap-3"
+											sx={{ border: 1, borderColor: "divider" }}
+											data-cy={`channel-card-${channel}`}
 										>
-											RD
-										</Box>
-										<div>
-											<Typography variant="subtitle1" className="font-bold">
-												RD Station Marketing
+											<div className="flex items-center gap-2.5">
+												<Box
+													className="flex items-center justify-center w-9 h-9 rounded-lg"
+													sx={{ bgcolor: "rgba(255,204,0,0.2)" }}
+												>
+													<Icon size={18} strokeWidth={1.75} />
+												</Box>
+												<div>
+													<Typography variant="body2" fontWeight={700}>
+														{CHANNEL_META[channel].label}
+													</Typography>
+													<Typography variant="caption" color="text.secondary">
+														{questions.length} perguntas · ex.: <code>{identifier}</code>
+													</Typography>
+												</div>
+											</div>
+											<Typography variant="body2" color="text.secondary">
+												{flow}
 											</Typography>
-											<Typography variant="caption" color="text.secondary">
-												{rd.lastReceivedAt
-													? `Último evento ${timeAgo(rd.lastReceivedAt)}`
-													: "Nenhum evento recebido ainda"}{" "}
-												· {rd.received30d} leads em 30 dias
-											</Typography>
-										</div>
-									</div>
-									<Chip
-										size="small"
-										color={rd.lastReceivedAt ? "success" : "default"}
-										variant="outlined"
-										icon={rd.lastReceivedAt ? <CircleCheck size={14} strokeWidth={1.5} /> : undefined}
-										label={rd.lastReceivedAt ? "Recebendo" : "Aguardando"}
-									/>
-								</div>
+											<ul className="flex flex-wrap gap-1">
+												{questions.map((q) => (
+													<li key={q}>
+														<Chip size="small" label={q} sx={{ bgcolor: "action.hover", fontWeight: 400 }} />
+													</li>
+												))}
+											</ul>
+											{isManager && (
+												<Button
+													size="small"
+													variant="outlined"
+													color="inherit"
+													className="!mt-auto self-start"
+													startIcon={<Send size={14} strokeWidth={1.75} />}
+													onClick={() => handleTest(channel)}
+													loading={isSending}
+													data-cy={`test-${channel}`}
+												>
+													Enviar lead de teste
+												</Button>
+											)}
+										</Paper>
+									);
+								})}
+							</div>
+							<Alert severity="info" variant="outlined">
+								<b>Respostas padronizadas:</b> use as mesmas opções nos formulários para os relatórios baterem. Perfil:{" "}
+								{QUALIFICATION_OPTIONS.businessType.join(", ")}. Contratos:{" "}
+								{QUALIFICATION_OPTIONS.contractsRange.join(", ")}. Quando começar:{" "}
+								{QUALIFICATION_OPTIONS.startTimeline.join(", ")}.
+							</Alert>
+						</section>
 
-								<ol className="space-y-2">
-									{STEPS.map((step, i) => (
-										<li key={step} className="flex gap-3">
-											<Box
-												className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0"
-												sx={{ bgcolor: "primary.main", color: "#000" }}
-											>
-												{i + 1}
-											</Box>
-											<Typography variant="body2" className="pt-0.5">
-												{step}
-											</Typography>
-										</li>
-									))}
-								</ol>
-
+						<section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+							<IntegrationCard
+								logo={
+									<Box
+										className="flex items-center justify-center w-10 h-10 rounded-lg font-black text-sm"
+										sx={{ bgcolor: "#1a1a2e", color: "#fff" }}
+										aria-hidden
+									>
+										RD
+									</Box>
+								}
+								title="RD Station Marketing"
+								status={{
+									ok: !!rd.lastReceivedAt,
+									text: `${rd.lastReceivedAt ? `Último evento ${timeAgo(rd.lastReceivedAt)}` : "Nenhum evento ainda"} · ${rd.received30d} leads em 30 dias`,
+								}}
+							>
+								<Steps
+									items={[
+										"No RD Station: Conta › Integrações › Webhooks › Criar webhook.",
+										<span key="k1">
+											Gatilho <b>Conversão</b>, filtrando os formulários do site, do WhatsApp e de agendamento.
+										</span>,
+										"Cole a URL abaixo e salve.",
+									]}
+								/>
 								{rd.webhookUrl ? (
-									<TextField
-										label="URL do webhook"
+									<CopyField
+										label="URL do webhook do RD"
 										value={rd.webhookUrl}
-										slotProps={{
-											htmlInput: { readOnly: true, "data-cy": "rd-webhook-url" },
-											input: {
-												endAdornment: (
-													<InputAdornment position="end">
-														<Tooltip title="Copiar URL">
-															<IconButton onClick={copyUrl} edge="end" aria-label="Copiar URL do webhook">
-																<Copy size={16} strokeWidth={1.5} />
-															</IconButton>
-														</Tooltip>
-													</InputAdornment>
-												),
-											},
-										}}
-										helperText="A URL contém o token de segurança. Compartilhe só com quem administra o RD Station."
+										helperText="Contém o token de segurança. Compartilhe só com quem administra o RD."
+										dataCy="rd-webhook-url"
 									/>
 								) : (
-									<Alert severity="info">Somente a gestão comercial vê a URL do webhook.</Alert>
+									<Alert severity="info">Somente gestores veem a URL do webhook.</Alert>
 								)}
+							</IntegrationCard>
 
-								{isManager && (
-									<div className="flex flex-wrap gap-2">
-										<Button
-											variant="outlined"
-											color="inherit"
-											startIcon={<Send size={16} strokeWidth={1.5} />}
-											onClick={handleTest}
-											loading={isSending}
-											data-cy="rd-send-test"
-										>
-											Enviar lead de teste
-										</Button>
-										<Button component={Link} to="/pipeline" variant="text" color="inherit">
-											Ver no pipeline
-										</Button>
-									</div>
+							<IntegrationCard
+								logo={
+									<Box
+										className="flex items-center justify-center w-10 h-10 rounded-lg font-bold text-xs"
+										sx={{ bgcolor: "#111", color: "#fff" }}
+										aria-hidden
+									>
+										Cal
+									</Box>
+								}
+								title="Cal.com (agendamentos)"
+								status={{
+									ok: !!rd.calLastReceivedAt,
+									text: `${rd.calLastReceivedAt ? `Último evento ${timeAgo(rd.calLastReceivedAt)}` : "Nenhum evento ainda"} · ${rd.calBookings30d} reuniões em 30 dias`,
+								}}
+							>
+								<Steps
+									items={[
+										"No Cal.com: Settings › Developer › Webhooks › New.",
+										<span key="k2">
+											Cole a URL abaixo em <b>Subscriber URL</b> e marque <b>Booking Created</b>,{" "}
+											<b>Booking Rescheduled</b> e <b>Booking Cancelled</b>.
+										</span>,
+										<span key="k3">
+											O e-mail de quem atende no Cal.com deve ser o mesmo do CRM (veja em{" "}
+											<Link to="/equipe" className="underline">
+												Equipe
+											</Link>
+											), para a reunião cair na agenda certa.
+										</span>,
+									]}
+								/>
+								{rd.calWebhookUrl ? (
+									<CopyField
+										label="URL do webhook do Cal.com"
+										value={rd.calWebhookUrl}
+										helperText="Remarcações e cancelamentos atualizam a reunião no CRM automaticamente."
+										dataCy="cal-webhook-url"
+									/>
+								) : (
+									<Alert severity="info">Somente gestores veem a URL do webhook.</Alert>
 								)}
-							</Paper>
+							</IntegrationCard>
+						</section>
 
-							<Paper className="rounded-xl p-5 space-y-3" sx={{ border: 1, borderColor: "divider" }}>
+						<section className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+							<Paper
+								className="lg:col-span-5 rounded-xl p-5 space-y-3 self-start"
+								sx={{ border: 1, borderColor: "divider" }}
+							>
 								<div>
 									<Typography variant="subtitle1" className="font-bold">
 										Distribuição dos novos leads
 									</Typography>
 									<Typography variant="body2" color="text.secondary">
-										Como os leads que chegam do RD Station ganham um responsável.
+										Como os leads que chegam ganham um responsável.
 									</Typography>
 								</div>
 								<RadioGroup
@@ -202,15 +386,14 @@ export function IntegrationsPage() {
 										label={
 											<div className="py-1">
 												<Typography variant="body2" fontWeight={600}>
-													Rodízio entre os comerciais
+													Rodízio entre os vendedores
 												</Typography>
 												<Typography variant="caption" color="text.secondary">
-													Cada lead vai para quem recebeu há mais tempo, com tarefa de primeiro contato em 1 hora.
-													Configure quem participa em{" "}
+													Cada lead vai para quem recebeu há mais tempo. Quem participa é definido em{" "}
 													<Link to="/equipe" className="underline">
 														Equipe
 													</Link>
-													.
+													. Agendamentos do Cal.com vão direto para quem vai atender.
 												</Typography>
 											</div>
 										}
@@ -225,81 +408,85 @@ export function IntegrationsPage() {
 													Fila sem responsável
 												</Typography>
 												<Typography variant="caption" color="text.secondary">
-													O lead entra sem dono e qualquer comercial pode clicar em “Assumir” no pipeline.
+													O lead entra sem dono e qualquer vendedor pode clicar em “Assumir” no pipeline.
 												</Typography>
 											</div>
 										}
 									/>
 								</RadioGroup>
 							</Paper>
-						</div>
 
-						<Paper
-							className="lg:col-span-5 rounded-xl p-5 space-y-3 self-start"
-							sx={{ border: 1, borderColor: "divider" }}
-						>
-							<div className="flex items-center justify-between">
-								<Typography variant="subtitle1" className="font-bold">
-									Eventos recebidos
-								</Typography>
-								<Tooltip title="Atualizar">
-									<IconButton
-										size="small"
-										onClick={() => refetch()}
-										disabled={isFetching}
-										aria-label="Atualizar eventos"
-									>
-										<RefreshCw size={16} strokeWidth={1.5} />
-									</IconButton>
-								</Tooltip>
-							</div>
-							{rd.logs.length === 0 ? (
-								<EmptyState
-									compact
-									title="Nenhum evento ainda"
-									description="Os eventos aparecem aqui assim que o RD Station enviar a primeira conversão."
-								/>
-							) : (
-								<ul className="divide-y">
-									{rd.logs.map((log) => {
-										const meta = LOG_STATUS[log.status];
-										const Icon = meta.icon;
-										return (
-											<li key={log.id} className="flex items-start gap-3 py-2.5">
-												<Box sx={{ color: `${meta.color}.main` }} className="pt-0.5">
-													<Icon size={16} strokeWidth={1.5} />
-												</Box>
-												<div className="flex-1 min-w-0">
-													<Typography variant="body2" fontWeight={500} noWrap>
-														{log.email ?? "Sem e-mail"}
-													</Typography>
-													<Typography variant="caption" color="text.secondary" component="div">
-														{meta.label}
-														{log.message ? ` · ${log.message}` : ""}
-													</Typography>
-												</div>
-												<div className="text-right shrink-0">
-													<Typography variant="caption" color="text.secondary" component="div">
-														{formatDateTime(log.createdAt)}
-													</Typography>
-													{log.leadId && (
-														<Typography
-															component={Link}
-															to={`/leads/${log.leadId}`}
-															variant="caption"
-															fontWeight={600}
-															className="hover:underline"
-														>
-															#{log.leadId}
+							<Paper className="lg:col-span-7 rounded-xl p-5 space-y-3" sx={{ border: 1, borderColor: "divider" }}>
+								<div className="flex items-center justify-between">
+									<Typography variant="subtitle1" className="font-bold">
+										Eventos recebidos
+									</Typography>
+									<Tooltip title="Atualizar">
+										<IconButton
+											size="small"
+											onClick={() => refetch()}
+											disabled={isFetching}
+											aria-label="Atualizar eventos"
+										>
+											<RefreshCw size={16} strokeWidth={1.75} />
+										</IconButton>
+									</Tooltip>
+								</div>
+								{rd.logs.length === 0 ? (
+									<EmptyState
+										compact
+										title="Nenhum evento ainda"
+										description="Os eventos aparecem aqui assim que o RD Station ou o Cal.com enviarem o primeiro lead."
+									/>
+								) : (
+									<ul className="divide-y">
+										{rd.logs.map((log) => {
+											const meta = LOG_STATUS[log.status];
+											const Icon = meta.icon;
+											return (
+												<li key={log.id} className="flex items-start gap-3 py-2.5">
+													<Box sx={{ color: `${meta.color}.main` }} className="pt-0.5">
+														<Icon size={16} strokeWidth={1.75} />
+													</Box>
+													<div className="flex-1 min-w-0">
+														<div className="flex items-center gap-2">
+															<Typography variant="body2" fontWeight={500} noWrap>
+																{log.email ?? "Sem e-mail"}
+															</Typography>
+															<Chip
+																size="small"
+																label={log.source === "cal.com" ? "Cal.com" : "RD"}
+																sx={{ height: 18, fontSize: 10, fontWeight: 700 }}
+															/>
+														</div>
+														<Typography variant="caption" color="text.secondary" component="div">
+															{log.message ?? meta.label}
+															{log.conversion ? ` · ${log.conversion}` : ""}
 														</Typography>
-													)}
-												</div>
-											</li>
-										);
-									})}
-								</ul>
-							)}
-						</Paper>
+													</div>
+													<div className="text-right shrink-0">
+														<Typography variant="caption" color="text.secondary" component="div">
+															{formatDateTime(log.createdAt)}
+														</Typography>
+														{log.leadId && (
+															<Typography
+																component={Link}
+																to={`/leads/${log.leadId}`}
+																variant="caption"
+																fontWeight={600}
+																className="hover:underline"
+															>
+																#{log.leadId}
+															</Typography>
+														)}
+													</div>
+												</li>
+											);
+										})}
+									</ul>
+								)}
+							</Paper>
+						</section>
 					</div>
 				)
 			}

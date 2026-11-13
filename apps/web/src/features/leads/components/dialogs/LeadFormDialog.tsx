@@ -3,15 +3,30 @@ import { SectionForm } from "@/components/layout/Form";
 import { Dialog, DialogActions, DialogContent, DialogTitle } from "@/components/ui/Dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotify } from "@/hooks/useNotify";
-import type { Lead } from "@/store/api/@types/lead.types";
+import type { Lead, LeadStage } from "@/store/api/@types/lead.types";
 import { useCreateLeadMutation, useGetUsersQuery, useUpdateLeadMutation } from "@/store/api/hooks";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import Typography from "@mui/material/Typography";
 import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod/v3";
-import { COMPANY_SIZES, LEAD_SOURCES, PLANS, STAGE_META, STAGE_ORDER, TEMPERATURE_META } from "../../constants";
+import {
+	BILLING_CYCLE_LABELS,
+	BRAZIL_STATES,
+	CHANNEL_META,
+	LEAD_SOURCES,
+	PLANS,
+	QUALIFICATION_LABELS,
+	QUALIFICATION_OPTIONS,
+	STAGE_META,
+	STAGE_ORDER,
+	TEMPERATURE_META,
+	planPrice,
+} from "../../constants";
 
 const FORM_ID = "lead-form";
 export const LEAD_NAME_MAX_LENGTH = 120;
@@ -28,35 +43,48 @@ export const leadValidationSchema = z.object({
 	phone: optional,
 	jobTitle: optional,
 	companyName: optional,
-	companySize: optional,
-	segment: optional,
 	website: optional,
 	city: optional,
-	state: z.string().trim().max(2, "Use a sigla da UF").nullish(),
+	state: optional,
+	businessType: optional,
+	managementRole: optional,
+	contractsRange: optional,
+	currentTool: optional,
+	startTimeline: optional,
 	temperature: z.enum(["COLD", "WARM", "HOT"]).nullish(),
 	estimatedValue: z.number({ invalid_type_error: "Valor inválido" }).min(0, "O valor deve ser positivo").nullish(),
 	plan: optional,
+	billingCycle: z.enum(["MONTHLY", "ANNUAL"]).nullish(),
+	channel: z.enum(["DEMO", "WHATSAPP", "SITE", "MANUAL"]),
 	source: z.string().min(1, "Origem é obrigatória"),
 	ownerId: z.string().nullish(),
 	stage: z.enum(["NEW", "QUALIFICATION", "MEETING", "TRIAL", "CLOSING"]),
 	notes: optional,
 });
 
-/** Campos de texto vazios viram null; UF em maiúsculas. */
+export type LeadValidationSchema = z.infer<typeof leadValidationSchema>;
+
+/** Campos de texto vazios viram null. */
 function toPayload(values: LeadValidationSchema) {
 	const entries = Object.entries(values).map(([key, value]) => [
 		key,
 		typeof value === "string" && value.trim() === "" ? null : value,
 	]);
-	const payload = Object.fromEntries(entries) as LeadValidationSchema;
-	return { ...payload, state: payload.state ? payload.state.toUpperCase() : null, source: values.source };
+	return { ...(Object.fromEntries(entries) as LeadValidationSchema), source: values.source };
 }
 
-export type LeadValidationSchema = z.infer<typeof leadValidationSchema>;
+const options = (values: readonly string[], current?: string | null) =>
+	[...new Set([...values, ...(current ? [current] : [])])].map((v) => ({ label: v, value: v }));
 
-type LeadFormDialogProps = { open: boolean; lead?: Lead | null; onClose: () => void; onSaved?: (lead: Lead) => void };
+type LeadFormDialogProps = {
+	open: boolean;
+	lead?: Lead | null;
+	defaultStage?: LeadStage;
+	onClose: () => void;
+	onSaved?: (lead: Lead) => void;
+};
 
-export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogProps) {
+export function LeadFormDialog({ open, lead, defaultStage, onClose, onSaved }: LeadFormDialogProps) {
 	const isEditing = !!lead;
 	const { user } = useAuth();
 	const notify = useNotify();
@@ -72,26 +100,33 @@ export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogP
 			phone: lead?.phone ?? null,
 			jobTitle: lead?.jobTitle ?? null,
 			companyName: lead?.companyName ?? null,
-			companySize: lead?.companySize ?? null,
-			segment: lead?.segment ?? null,
 			website: lead?.website ?? null,
 			city: lead?.city ?? null,
 			state: lead?.state ?? null,
+			businessType: lead?.businessType ?? null,
+			managementRole: lead?.managementRole ?? null,
+			contractsRange: lead?.contractsRange ?? null,
+			currentTool: lead?.currentTool ?? null,
+			startTimeline: lead?.startTimeline ?? null,
 			temperature: lead?.temperature ?? null,
 			estimatedValue: lead?.estimatedValue ?? null,
 			plan: lead?.plan ?? null,
+			billingCycle: lead?.billingCycle ?? "MONTHLY",
+			channel: lead?.channel ?? "MANUAL",
 			source: lead?.source ?? "Manual",
 			ownerId: lead ? lead.ownerId : (user?.id ?? null),
-			stage: lead?.stage ?? "NEW",
+			stage: lead?.stage ?? defaultStage ?? "NEW",
 			notes: lead?.notes ?? null,
 		}),
-		[lead, user?.id],
+		[lead, user?.id, defaultStage],
 	);
 
 	const {
 		control,
 		handleSubmit,
 		reset,
+		setValue,
+		getValues,
 		formState: { errors },
 	} = useForm<LeadValidationSchema>({ resolver: zodResolver(leadValidationSchema), defaultValues });
 
@@ -99,8 +134,15 @@ export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogP
 		if (open) reset(defaultValues);
 	}, [open, defaultValues, reset]);
 
+	// Escolher plano e ciclo preenche o valor mensal pela tabela de preços (dá para ajustar depois)
+	const [plan, billingCycle] = useWatch({ control, name: ["plan", "billingCycle"] });
+	useEffect(() => {
+		const price = planPrice(plan, billingCycle);
+		if (price !== null && price !== getValues("estimatedValue")) setValue("estimatedValue", price);
+	}, [plan, billingCycle, setValue, getValues]);
+
 	const userOptions = (users?.data ?? []).map((u) => ({ label: u.name, value: u.id }));
-	const sourceOptions = [...new Set([...LEAD_SOURCES, lead?.source ?? "Manual"])].map((s) => ({ label: s, value: s }));
+	const isFromIntegration = lead?.source === "RD Station" || lead?.source === "Cal.com";
 
 	const handleSave = async (values: LeadValidationSchema) => {
 		try {
@@ -120,22 +162,37 @@ export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogP
 		}
 	};
 
+	const qualificationField = (name: keyof typeof QUALIFICATION_OPTIONS, className = "col-span-12 md:col-span-6") => (
+		<RHFSelect
+			className={className}
+			control={control}
+			name={name}
+			label={QUALIFICATION_LABELS[name]}
+			options={options(QUALIFICATION_OPTIONS[name], lead?.[name])}
+			disabled={isSaving}
+		/>
+	);
+
 	return (
 		<Dialog open={open} onClose={isSaving ? undefined : onClose} maxWidth="md" data-cy="lead-form-dialog">
 			<DialogTitle
 				onClose={onClose}
-				subtitle={isEditing ? `#${lead?.id}` : "Leads do RD Station entram automaticamente"}
+				subtitle={
+					isEditing
+						? `#${lead?.id}`
+						: "Leads do RD Station e do Cal.com entram sozinhos. Use para indicações, eventos e prospecção."
+				}
 			>
 				{isEditing ? "Editar lead" : "Novo lead"}
 			</DialogTitle>
 			<DialogContent>
-				<form id={FORM_ID} onSubmit={handleSubmit(handleSave)} className="space-y-5" noValidate>
+				<form id={FORM_ID} onSubmit={handleSubmit(handleSave)} className="space-y-6" noValidate>
 					<SectionForm title="Contato">
 						<RHFTextField
 							className="col-span-12 md:col-span-6"
 							control={control}
 							name="name"
-							label="Nome*"
+							label="Nome completo*"
 							autoFocus
 							disabled={isSaving}
 							error={!!errors.name}
@@ -145,15 +202,15 @@ export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogP
 						<RHFTextField
 							className="col-span-12 md:col-span-6"
 							control={control}
-							name="jobTitle"
-							label="Cargo"
+							name="companyName"
+							label="Empresa"
 							disabled={isSaving}
 						/>
 						<RHFTextField
 							className="col-span-12 md:col-span-6"
 							control={control}
 							name="email"
-							label="E-mail"
+							label="E-mail corporativo"
 							type="email"
 							disabled={isSaving}
 							error={!!errors.email}
@@ -163,57 +220,37 @@ export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogP
 							className="col-span-12 md:col-span-6"
 							control={control}
 							name="phone"
-							label="Telefone / WhatsApp"
+							label="WhatsApp"
 							disabled={isSaving}
 						/>
 					</SectionForm>
-					<SectionForm title="Empresa">
-						<RHFTextField
-							className="col-span-12 md:col-span-6"
-							control={control}
-							name="companyName"
-							label="Empresa"
-							disabled={isSaving}
-						/>
+
+					<SectionForm
+						title="Qualificação"
+						infoText="As mesmas perguntas dos formulários do site, do WhatsApp e do agendamento."
+					>
+						{qualificationField("businessType")}
+						{qualificationField("contractsRange")}
+						{qualificationField("managementRole")}
+						{qualificationField("currentTool")}
+						{qualificationField("startTimeline")}
 						<RHFSelect
-							className="col-span-12 md:col-span-6"
+							className="col-span-6 md:col-span-3"
 							control={control}
-							name="companySize"
-							label="Tamanho"
-							options={COMPANY_SIZES.map((s) => ({ label: s, value: s }))}
+							name="state"
+							label="Estado"
+							options={BRAZIL_STATES.map((s) => ({ label: s, value: s }))}
 							disabled={isSaving}
 						/>
 						<RHFTextField
-							className="col-span-12 md:col-span-4"
-							control={control}
-							name="segment"
-							label="Segmento"
-							disabled={isSaving}
-						/>
-						<RHFTextField
-							className="col-span-12 md:col-span-4"
-							control={control}
-							name="website"
-							label="Site"
-							disabled={isSaving}
-						/>
-						<RHFTextField
-							className="col-span-8 md:col-span-3"
+							className="col-span-6 md:col-span-3"
 							control={control}
 							name="city"
 							label="Cidade"
 							disabled={isSaving}
 						/>
-						<RHFTextField
-							className="col-span-4 md:col-span-1"
-							control={control}
-							name="state"
-							label="UF"
-							disabled={isSaving}
-							error={!!errors.state}
-							slotProps={{ htmlInput: { maxLength: 2 } }}
-						/>
 					</SectionForm>
+
 					<SectionForm title="Oportunidade">
 						<RHFSelect
 							className="col-span-12 md:col-span-4"
@@ -241,41 +278,78 @@ export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogP
 						<RHFSelect
 							className="col-span-12 md:col-span-4"
 							control={control}
-							name="source"
-							label="Origem*"
-							emptyLabel={false}
-							options={sourceOptions}
-							disabled={isSaving || lead?.source === "RD Station"}
-						/>
-						<RHFSelect
-							className="col-span-12 md:col-span-4"
-							control={control}
 							name="temperature"
 							label="Temperatura"
-							options={Object.entries(TEMPERATURE_META).map(([value, m]) => ({ label: m.label, value }))}
+							options={Object.entries(TEMPERATURE_META).map(([value, m]) => ({
+								label: `${m.label} · ${m.hint.toLowerCase()}`,
+								value,
+							}))}
 							disabled={isSaving}
-						/>
-						<RHFTextField
-							className="col-span-12 md:col-span-4"
-							control={control}
-							name="estimatedValue"
-							label="Valor mensal estimado"
-							type="number"
-							disabled={isSaving}
-							error={!!errors.estimatedValue}
-							helperText={errors.estimatedValue?.message}
-							slotProps={{
-								input: { startAdornment: <InputAdornment position="start">R$</InputAdornment> },
-								htmlInput: { min: 0, step: 10 },
-							}}
 						/>
 						<RHFSelect
 							className="col-span-12 md:col-span-4"
 							control={control}
 							name="plan"
 							label="Plano de interesse"
-							options={PLANS.map((p) => ({ label: p, value: p }))}
+							options={PLANS.map((p) => ({ label: p.name, value: p.name }))}
 							disabled={isSaving}
+						/>
+						<div className="col-span-12 md:col-span-4">
+							<Controller
+								control={control}
+								name="billingCycle"
+								render={({ field }) => (
+									<ToggleButtonGroup
+										exclusive
+										fullWidth
+										value={field.value ?? "MONTHLY"}
+										onChange={(_, v) => v && field.onChange(v)}
+										sx={{ "& .MuiToggleButton-root": { height: 40 } }}
+										aria-label="Ciclo de cobrança"
+										disabled={isSaving}
+									>
+										{(["MONTHLY", "ANNUAL"] as const).map((c) => (
+											<ToggleButton key={c} value={c}>
+												{BILLING_CYCLE_LABELS[c]}
+											</ToggleButton>
+										))}
+									</ToggleButtonGroup>
+								)}
+							/>
+						</div>
+						<RHFTextField
+							className="col-span-12 md:col-span-4"
+							control={control}
+							name="estimatedValue"
+							label="Valor mensal"
+							type="number"
+							disabled={isSaving}
+							error={!!errors.estimatedValue}
+							helperText={
+								errors.estimatedValue?.message ?? (plan === "Enterprise" ? "Enterprise: valor sob consulta" : " ")
+							}
+							slotProps={{
+								input: { startAdornment: <InputAdornment position="start">R$</InputAdornment> },
+								htmlInput: { min: 0, step: 10 },
+							}}
+						/>
+						<RHFSelect
+							className="col-span-12 md:col-span-6"
+							control={control}
+							name="channel"
+							label="Canal de entrada*"
+							emptyLabel={false}
+							options={Object.entries(CHANNEL_META).map(([value, m]) => ({ label: m.label, value }))}
+							disabled={isSaving || isFromIntegration}
+						/>
+						<RHFSelect
+							className="col-span-12 md:col-span-6"
+							control={control}
+							name="source"
+							label="Origem*"
+							emptyLabel={false}
+							options={options(LEAD_SOURCES, lead?.source)}
+							disabled={isSaving || isFromIntegration}
 						/>
 						<RHFTextField
 							className="col-span-12"
@@ -283,10 +357,15 @@ export function LeadFormDialog({ open, lead, onClose, onSaved }: LeadFormDialogP
 							name="notes"
 							label="Observações"
 							multiline
-							minRows={3}
+							minRows={2}
 							disabled={isSaving}
 						/>
 					</SectionForm>
+					{isFromIntegration && (
+						<Typography variant="caption" color="text.secondary" component="p">
+							Canal e origem vêm da integração e não podem ser alterados.
+						</Typography>
+					)}
 				</form>
 			</DialogContent>
 			<DialogActions>

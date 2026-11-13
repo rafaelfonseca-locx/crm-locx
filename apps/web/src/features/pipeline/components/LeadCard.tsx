@@ -1,19 +1,55 @@
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { NextActivityLabel } from "@/features/leads/components/NextActivityLabel";
+import { ChannelIcon } from "@/features/leads/components/ChannelIcon";
 import { PARTICIPANT_ROLE_LABELS, TEMPERATURE_META } from "@/features/leads/constants";
 import { getTrialProgress, trialDaysLeftLabel } from "@/features/trials/trialProgress";
 import type { Lead } from "@/store/api/@types/lead.types";
-import { daysSince, formatCurrency } from "@/utils/formatters";
+import { daysSince, formatCurrency, formatRelativeDay } from "@/utils/formatters";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import { Flame, Snowflake, Sun, Timer } from "lucide-react";
+import { AlarmClockOff, CalendarClock, CircleAlert, Clock, Flame, Snowflake, Sun } from "lucide-react";
 import type { CSSProperties } from "react";
+import { ROTTING_DAYS } from "../rotting";
 
 const TEMPERATURE_ICONS = { COLD: Snowflake, WARM: Sun, HOT: Flame };
+const TEMPERATURE_COLORS = { COLD: "info.main", WARM: "warning.main", HOT: "error.main" };
+
+/** Ícone do próximo passo: verde (agendado), vermelho (atrasado) ou laranja (sem próximo passo). */
+function NextStepIndicator({ activity }: { activity: Lead["nextActivity"] }) {
+	if (!activity?.dueAt) {
+		return (
+			<Tooltip title="Sem próximo passo. Crie uma tarefa ou agende uma reunião para não esquecer este lead.">
+				<Box
+					className="flex items-center justify-center w-6 h-6 rounded-full"
+					sx={{ bgcolor: "rgba(230,81,0,0.12)", color: "warning.main" }}
+					aria-label="Sem próximo passo"
+				>
+					<AlarmClockOff size={13} strokeWidth={2} />
+				</Box>
+			</Tooltip>
+		);
+	}
+	const overdue = new Date(activity.dueAt) < new Date();
+	const Icon = overdue ? CircleAlert : activity.type === "MEETING" ? CalendarClock : Clock;
+	return (
+		<Tooltip
+			title={`${overdue ? "Atrasada" : "Próximo passo"}: ${activity.title ?? ""} · ${formatRelativeDay(activity.dueAt)}`}
+		>
+			<Box
+				className="flex items-center justify-center w-6 h-6 rounded-full"
+				sx={{
+					bgcolor: overdue ? "rgba(211,47,47,0.12)" : "rgba(46,125,50,0.12)",
+					color: overdue ? "error.main" : "success.main",
+				}}
+				aria-label={overdue ? "Próximo passo atrasado" : "Próximo passo agendado"}
+			>
+				<Icon size={13} strokeWidth={2} />
+			</Box>
+		</Tooltip>
+	);
+}
 
 type LeadCardProps = {
 	lead: Lead;
@@ -25,144 +61,155 @@ type LeadCardProps = {
 
 export function LeadCard({ lead, isDragging, isOverlay, onClaim, style }: LeadCardProps) {
 	const daysInStage = daysSince(lead.stageChangedAt);
+	const rotLimit = ROTTING_DAYS[lead.stage];
+	const isRotting = rotLimit !== null && daysInStage > rotLimit;
 	const trial = lead.trial?.status === "ACTIVE" ? getTrialProgress(lead.trial) : null;
 	const TemperatureIcon = lead.temperature ? TEMPERATURE_ICONS[lead.temperature] : null;
+	const subtitle = [
+		lead.companyName ? lead.name : (lead.email ?? null),
+		lead.contractsRange ? `${lead.contractsRange} contratos` : null,
+	]
+		.filter(Boolean)
+		.join(" · ");
 
 	return (
 		<Box
 			style={style}
-			className="rounded-xl border p-3 space-y-2.5 select-none"
+			className="rounded-lg border px-3 py-2.5 select-none"
 			sx={{
 				bgcolor: "background.paper",
 				opacity: isDragging ? 0.35 : 1,
-				boxShadow: isOverlay ? 12 : "0 1px 2px rgba(0,0,0,0.04)",
-				transform: isOverlay ? "rotate(2deg)" : undefined,
+				boxShadow: isOverlay ? "0 12px 32px rgba(0,0,0,0.18)" : "0 1px 2px rgba(16,24,40,0.05)",
+				transform: isOverlay ? "rotate(1.5deg)" : undefined,
 				cursor: isOverlay ? "grabbing" : "pointer",
+				borderLeft: isRotting ? "3px solid" : undefined,
+				borderLeftColor: isRotting ? "error.main" : undefined,
 				transition: "border-color 120ms, box-shadow 120ms",
-				"&:hover": { borderColor: "text.disabled", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" },
+				"&:hover": { borderColor: "text.disabled", boxShadow: "0 4px 12px rgba(16,24,40,0.08)" },
 			}}
 			data-cy={`lead-card-${lead.id}`}
 		>
-			<div className="flex items-start justify-between gap-2">
-				<div className="min-w-0">
-					<Typography variant="body2" fontWeight={600} noWrap title={lead.companyName ?? lead.name}>
-						{lead.companyName ?? lead.name}
-					</Typography>
-					<Typography variant="caption" color="text.secondary" noWrap component="div">
-						{lead.companyName ? lead.name : (lead.email ?? "Sem empresa")}
-					</Typography>
-				</div>
+			<div className="flex items-start gap-1.5">
+				<Typography
+					variant="body2"
+					fontWeight={600}
+					className="flex-1 min-w-0 leading-snug"
+					noWrap
+					title={lead.companyName ?? lead.name}
+				>
+					{lead.companyName ?? lead.name}
+				</Typography>
 				{lead.temperature && TemperatureIcon && (
-					<Tooltip title={`Temperatura: ${TEMPERATURE_META[lead.temperature].label}`}>
-						<Chip
-							size="small"
-							variant="outlined"
-							color={TEMPERATURE_META[lead.temperature].color}
-							icon={<TemperatureIcon size={12} strokeWidth={1.5} />}
-							label={TEMPERATURE_META[lead.temperature].label}
-							sx={{ height: 22, fontSize: 11, "& .MuiChip-label": { px: 0.75 } }}
-						/>
+					<Tooltip title={`${TEMPERATURE_META[lead.temperature].label}: ${TEMPERATURE_META[lead.temperature].hint}`}>
+						<Box
+							component="span"
+							className="inline-flex pt-0.5"
+							sx={{ color: TEMPERATURE_COLORS[lead.temperature] }}
+							aria-label={`Temperatura ${TEMPERATURE_META[lead.temperature].label}`}
+						>
+							<TemperatureIcon size={14} strokeWidth={2} />
+						</Box>
 					</Tooltip>
 				)}
 			</div>
+			{subtitle && (
+				<Typography variant="caption" color="text.secondary" noWrap component="div" className="mt-0.5">
+					{subtitle}
+				</Typography>
+			)}
 
-			<div className="flex flex-wrap items-center gap-1.5">
-				{lead.estimatedValue !== null && (
-					<Typography variant="caption" fontWeight={600} className="tabular-nums">
-						{formatCurrency(lead.estimatedValue)}
-						<span className="font-normal opacity-60">/mês</span>
-					</Typography>
-				)}
-				{lead.source === "RD Station" && (
-					<Chip
-						size="small"
-						label="RD"
-						sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: "action.selected" }}
-					/>
-				)}
-				{lead.tags.slice(0, 2).map((tag) => (
-					<Chip key={tag} size="small" label={tag} sx={{ height: 20, fontSize: 10, bgcolor: "action.hover" }} />
-				))}
-			</div>
+			{(lead.estimatedValue !== null || lead.plan) && (
+				<Typography variant="caption" component="div" className="mt-1.5 tabular-nums" color="text.secondary">
+					{lead.estimatedValue !== null && (
+						<Box component="span" sx={{ color: "text.primary", fontWeight: 600 }}>
+							{formatCurrency(lead.estimatedValue)}
+						</Box>
+					)}
+					{lead.estimatedValue !== null && "/mês"}
+					{lead.plan && ` · ${lead.plan}${lead.billingCycle === "ANNUAL" ? " anual" : ""}`}
+				</Typography>
+			)}
 
-			{trial && lead.trial && (
-				<div className="space-y-1">
-					<div className="flex justify-between">
+			{trial && (
+				<div className="mt-2 space-y-1">
+					<div className="flex justify-between items-baseline">
 						<Typography variant="caption" fontWeight={600}>
-							Dia {trial.currentDay} de {trial.totalDays}
+							Dia {trial.currentDay}/{trial.totalDays}
+							<Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
+								{" "}
+								· roteiro {trial.checklistDone}/{trial.checklistTotal}
+							</Box>
 						</Typography>
 						<Typography
 							variant="caption"
+							fontWeight={600}
 							color={trial.isExpired ? "error.main" : trial.isEndingSoon ? "warning.main" : "text.secondary"}
-							fontWeight={500}
 						>
-							{trialDaysLeftLabel(trial.daysLeft)}
+							{trial.daysLeft < 0 ? "Vencido" : `${trial.daysLeft}d`}
 						</Typography>
 					</div>
-					<LinearProgress
-						variant="determinate"
-						value={trial.timePercent}
-						color={trial.isExpired ? "error" : trial.isEndingSoon ? "warning" : "primary"}
-						aria-label="Progresso do trial"
-					/>
-					<Typography variant="caption" color="text.secondary" component="div">
-						Checklist {trial.checklistDone}/{trial.checklistTotal}
-						{trial.overdueItems > 0 && (
-							<Box component="span" sx={{ color: "error.main" }}>
-								{" "}
-								· {trial.overdueItems} pendente{trial.overdueItems > 1 ? "s" : ""}
-							</Box>
-						)}
-					</Typography>
+					<Tooltip title={trialDaysLeftLabel(trial.daysLeft)}>
+						<LinearProgress
+							variant="determinate"
+							value={trial.timePercent}
+							color={trial.isExpired ? "error" : trial.isEndingSoon ? "warning" : "primary"}
+							sx={{ height: 4 }}
+							aria-label="Progresso do trial"
+						/>
+					</Tooltip>
 				</div>
 			)}
 
-			<div className="flex items-center justify-between gap-2 pt-1 border-t border-dashed">
-				<div className="min-w-0 flex-1 pt-1.5">
-					<NextActivityLabel activity={lead.nextActivity} />
-				</div>
-				<div className="flex items-center gap-1.5 pt-1.5 shrink-0">
-					<Tooltip title={`${daysInStage} ${daysInStage === 1 ? "dia" : "dias"} nesta etapa`}>
-						<Typography
-							variant="caption"
-							color={daysInStage > 7 ? "warning.main" : "text.disabled"}
-							className="flex items-center gap-0.5 tabular-nums"
+			<div className="flex items-center gap-2 mt-2.5">
+				{lead.owner ? (
+					<div className="flex -space-x-1.5">
+						<UserAvatar user={lead.owner} size={22} tooltip={`Responsável: ${lead.owner.name}`} />
+						{lead.participants.slice(0, 2).map((p) => (
+							<UserAvatar
+								key={p.id}
+								user={p.user}
+								size={22}
+								tooltip={`${p.user.name} · ${PARTICIPANT_ROLE_LABELS[p.role]}`}
+							/>
+						))}
+					</div>
+				) : (
+					onClaim && (
+						<Button
+							size="small"
+							variant="outlined"
+							color="inherit"
+							sx={{ height: 22, fontSize: 11, px: 1, minWidth: 0, borderRadius: 1.5 }}
+							onPointerDown={(e) => e.stopPropagation()}
+							onClick={(e) => {
+								e.stopPropagation();
+								onClaim(lead);
+							}}
+							data-cy={`lead-action-claim-${lead.id}`}
 						>
-							<Timer size={12} strokeWidth={1.5} />
-							{daysInStage}d
-						</Typography>
-					</Tooltip>
-					{lead.owner ? (
-						<div className="flex -space-x-1.5">
-							<UserAvatar user={lead.owner} size={22} tooltip={`Responsável: ${lead.owner.name}`} />
-							{lead.participants.slice(0, 2).map((p) => (
-								<UserAvatar
-									key={p.id}
-									user={p.user}
-									size={22}
-									tooltip={`${p.user.name} · ${PARTICIPANT_ROLE_LABELS[p.role]}`}
-								/>
-							))}
-						</div>
-					) : (
-						onClaim && (
-							<Button
-								size="small"
-								variant="outlined"
-								color="inherit"
-								sx={{ height: 24, fontSize: 11, px: 1, minWidth: 0 }}
-								onPointerDown={(e) => e.stopPropagation()}
-								onClick={(e) => {
-									e.stopPropagation();
-									onClaim(lead);
-								}}
-								data-cy={`lead-action-claim-${lead.id}`}
-							>
-								Assumir
-							</Button>
-						)
-					)}
-				</div>
+							Assumir
+						</Button>
+					)
+				)}
+				<ChannelIcon channel={lead.channel} size={13} />
+				<div className="flex-1" />
+				<Tooltip
+					title={
+						isRotting
+							? `Parado há ${daysInStage} dias nesta etapa (o normal é até ${rotLimit})`
+							: `${daysInStage} ${daysInStage === 1 ? "dia" : "dias"} nesta etapa`
+					}
+				>
+					<Typography
+						variant="caption"
+						color={isRotting ? "error.main" : "text.disabled"}
+						fontWeight={isRotting ? 600 : 400}
+						className="tabular-nums"
+					>
+						{daysInStage}d
+					</Typography>
+				</Tooltip>
+				<NextStepIndicator activity={lead.nextActivity} />
 			</div>
 		</Box>
 	);

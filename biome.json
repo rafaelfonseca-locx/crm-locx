@@ -1,0 +1,15 @@
+{
+	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"files": { "ignore": ["**/dist", "**/node_modules", "**/*.css"] },
+	"formatter": { "indentStyle": "tab", "lineWidth": 120 },
+	"javascript": { "formatter": { "quoteStyle": "double" } },
+	"organizeImports": { "enabled": true },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"suspicious": { "noExplicitAny": "error", "noConsole": { "level": "error", "options": { "allow": ["error", "info", "warn"] } } },
+			"a11y": { "noAutofocus": "off" }
+		}
+	}
+}

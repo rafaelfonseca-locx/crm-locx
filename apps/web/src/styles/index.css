@@ -1,0 +1,54 @@
+@layer theme, base, mui, components, utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Breakpoints e escala de fonte iguais aos do design system LocX (md = 960px) */
+@theme {
+	--breakpoint-sm: 37.5rem;
+	--breakpoint-md: 60rem;
+	--breakpoint-lg: 75rem;
+	--breakpoint-xl: 120rem;
+	--text-xxs: 0.5rem;
+	--text-xs: 0.625rem;
+	--text-sm: 0.75rem;
+	--text-base: 0.875rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+	--text-3xl: 1.875rem;
+	--text-4xl: 2.25rem;
+	--font-sans: "Inter", Roboto, "Helvetica", Arial, sans-serif;
+	--color-table-selected-row: #fff9c4;
+}
+
+@layer base {
+	html,
+	body,
+	#root {
+		height: 100%;
+	}
+	body {
+		font-feature-settings: "salt";
+		-webkit-font-smoothing: antialiased;
+	}
+	*,
+	::before,
+	::after {
+		border-color: var(--mui-palette-divider);
+	}
+	:focus-visible {
+		outline: 2px solid var(--mui-palette-primary-main);
+		outline-offset: 2px;
+	}
+}
+
+.container-box {
+	width: 100%;
+	max-width: 1440px;
+	margin-inline: auto;
+}
+
+.scrollbar-thin {
+	scrollbar-width: thin;
+}

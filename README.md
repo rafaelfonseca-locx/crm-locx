@@ -75,6 +75,8 @@ Atalhos: `Ctrl/⌘ + K` abre a busca global (nome, empresa, e-mail, telefone ou 
 
 ## Arquitetura
 
+Detalhes técnicos, recursos necessários e análise de segurança para o TI: [docs/TECNICO-E-SEGURANCA.md](docs/TECNICO-E-SEGURANCA.md).
+
 ```
 apps/
 ├── api/   Node 22 + Express 5 + TypeScript + Prisma + PostgreSQL + Zod (autenticação JWT)

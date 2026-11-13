@@ -16,8 +16,18 @@ export const dashboardApi = apiService.injectEndpoints({
 			query: (body) => ({ url: "/integrations/settings/assignment", method: "PUT", body }),
 			invalidatesTags: ["Integration"],
 		}),
-		sendRdTestLead: build.mutation<ApiResponse<unknown[]>, void>({
-			query: () => ({ url: "/integrations/rd-station/test", method: "POST" }),
+		sendRdTestLead: build.mutation<ApiResponse<unknown[]>, { channel: "DEMO" | "WHATSAPP" | "SITE" }>({
+			query: (body) => ({ url: "/integrations/rd-station/test", method: "POST", body }),
+			invalidatesTags: [
+				"Integration",
+				{ type: "Lead", id: "LIST" },
+				"Dashboard",
+				{ type: "Activity", id: "AGENDA" },
+				"User",
+			],
+		}),
+		sendCalTestBooking: build.mutation<ApiResponse<unknown>, void>({
+			query: () => ({ url: "/integrations/cal/test", method: "POST" }),
 			invalidatesTags: [
 				"Integration",
 				{ type: "Lead", id: "LIST" },

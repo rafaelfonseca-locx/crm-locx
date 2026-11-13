@@ -1,101 +1,200 @@
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { useLeadDialogs } from "@/features/leads/components/dialogs/LeadDialogsProvider";
+import { ROLE_LABELS } from "@/features/leads/constants";
+import { useOnboarding } from "@/features/onboarding/OnboardingProvider";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsDarkMode } from "@/hooks/useStageColor";
+import { apiService } from "@/store/api/apiService";
 import { useGetDashboardQuery } from "@/store/api/hooks";
+import { logout } from "@/store/authSlice";
+import { useAppDispatch } from "@/store/hooks";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import { useColorScheme } from "@mui/material/styles";
+import { BookOpen, ChevronsLeft, ChevronsRight, LogOut, Moon, Plus, Search, Sun } from "lucide-react";
+import { useState } from "react";
 import { NavLink } from "react-router";
+import { LocxLogo } from "./Brand";
 import { NAVIGATION } from "./navigation";
 
-export function LocxLogo({ compact }: { compact?: boolean }) {
-	return (
-		<div className="flex items-center gap-2.5">
-			<Box
-				className="flex items-center justify-center w-8 h-8 rounded-lg font-black text-sm"
-				sx={{ bgcolor: "primary.main", color: "#000" }}
-			>
-				LX
-			</Box>
-			{!compact && (
-				<div className="leading-none">
-					<div className="font-bold text-base tracking-tight">LocX</div>
-					<div className="text-xs uppercase tracking-[0.14em] opacity-60 mt-0.5">CRM</div>
-				</div>
-			)}
-		</div>
+export const SIDEBAR_WIDTH = 240;
+export const SIDEBAR_COLLAPSED_WIDTH = 68;
+
+type SidebarProps = {
+	collapsed?: boolean;
+	onToggleCollapsed?: () => void;
+	onNavigate?: () => void;
+	onOpenSearch: () => void;
+};
+
+/** Rótulo que some quando a barra está recolhida; o item ganha tooltip no lugar. */
+function WithTooltip({
+	collapsed,
+	title,
+	children,
+}: { collapsed?: boolean; title: string; children: React.ReactElement }) {
+	return collapsed ? (
+		<Tooltip title={title} placement="right">
+			{children}
+		</Tooltip>
+	) : (
+		children
 	);
 }
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, onOpenSearch }: SidebarProps) {
 	const { user } = useAuth();
+	const dispatch = useAppDispatch();
+	const { setMode } = useColorScheme();
+	const isDark = useIsDarkMode();
+	const { openCreateLead } = useLeadDialogs();
+	const { openGuide } = useOnboarding();
+	const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 	const { data } = useGetDashboardQuery({ days: 30 }, { pollingInterval: 120_000 });
 	const agendaAlerts = (data?.data.myAgenda.overdue ?? 0) + (data?.data.myAgenda.today ?? 0);
 	const trialsEnding = data?.data.trialsEnding.length ?? 0;
-
 	const badgeFor = (id: string) => (id === "agenda" ? agendaAlerts : id === "trials" ? trialsEnding : 0);
+
+	const handleLogout = () => {
+		dispatch(logout());
+		dispatch(apiService.util.resetApiState());
+	};
+
+	const itemClass = `relative flex items-center gap-3 h-9 rounded-lg text-[13px] font-medium transition-colors ${collapsed ? "justify-center px-0" : "px-2.5"}`;
 
 	return (
 		<Box
 			component="nav"
 			aria-label="Navegação principal"
-			className="flex flex-col h-full w-[248px] px-3 py-4"
-			sx={{ bgcolor: "sidebar.background", color: "sidebar.text" }}
+			className="flex flex-col h-full py-3 border-r transition-[width] duration-200"
+			sx={{
+				width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
+				bgcolor: "sidebar.background",
+				color: "sidebar.text",
+				borderColor: "sidebar.border",
+				px: collapsed ? 1.25 : 1.5,
+			}}
 		>
-			<div className="px-2 pb-6">
-				<LocxLogo />
-			</div>
-			<div className="flex-1 space-y-6 overflow-y-auto scrollbar-thin">
-				{NAVIGATION.map((section) => (
-					<div key={section.title}>
-						<Typography
-							component="div"
-							className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.12em]"
+			<div className={`flex items-center h-10 mb-3 ${collapsed ? "justify-center" : "justify-between pl-1.5"}`}>
+				<LocxLogo compact={collapsed} height={collapsed ? 22 : 24} />
+				{onToggleCollapsed && !collapsed && (
+					<Tooltip title="Recolher menu">
+						<IconButton
+							size="small"
+							onClick={onToggleCollapsed}
+							aria-label="Recolher menu"
 							sx={{ color: "sidebar.muted" }}
 						>
-							{section.title}
-						</Typography>
+							<ChevronsLeft size={18} strokeWidth={1.75} />
+						</IconButton>
+					</Tooltip>
+				)}
+			</div>
+
+			<div className="space-y-1.5 mb-4">
+				<WithTooltip collapsed={collapsed} title="Novo lead">
+					<Button
+						fullWidth
+						onClick={() => {
+							onNavigate?.();
+							openCreateLead();
+						}}
+						startIcon={collapsed ? undefined : <Plus size={16} strokeWidth={2.25} />}
+						data-cy="button-register-leads"
+						sx={{ minWidth: 0, px: collapsed ? 0 : undefined }}
+						aria-label="Novo lead"
+					>
+						{collapsed ? <Plus size={18} strokeWidth={2.25} /> : "Novo lead"}
+					</Button>
+				</WithTooltip>
+				<WithTooltip collapsed={collapsed} title="Buscar (Ctrl K)">
+					<Box
+						component="button"
+						type="button"
+						onClick={onOpenSearch}
+						data-cy="open-search"
+						className={`${itemClass} w-full border`}
+						sx={{ color: "sidebar.muted", borderColor: "sidebar.border", "&:hover": { bgcolor: "sidebar.hover" } }}
+						aria-label="Buscar"
+					>
+						<Search size={16} strokeWidth={1.75} />
+						{!collapsed && (
+							<>
+								<span className="flex-1 text-left font-normal">Buscar</span>
+								<span className="text-[11px] border rounded px-1 py-px font-normal" style={{ borderColor: "inherit" }}>
+									Ctrl K
+								</span>
+							</>
+						)}
+					</Box>
+				</WithTooltip>
+			</div>
+
+			<div className="flex-1 space-y-5 overflow-y-auto scrollbar-none">
+				{NAVIGATION.map((section) => (
+					<div key={section.title}>
+						{!collapsed && (
+							<Typography
+								component="div"
+								className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]"
+								sx={{ color: "sidebar.muted" }}
+							>
+								{section.title}
+							</Typography>
+						)}
+						{collapsed && <Divider className="!mb-2 !mx-2" />}
 						<ul className="space-y-0.5">
 							{section.items.map(({ id, label, to, icon: Icon }) => {
 								const badge = badgeFor(id);
 								return (
 									<li key={id}>
-										<Box
-											component={NavLink}
-											to={to}
-											end={to === "/"}
-											onClick={onNavigate}
-											data-cy={`nav-${id}`}
-											className="relative flex items-center gap-3 px-3 h-10 rounded-lg text-[13px] font-medium transition-colors"
-											sx={{
-												color: "sidebar.text",
-												"&:hover": { bgcolor: "sidebar.hover" },
-												"&.active": { bgcolor: "sidebar.active", color: "primary.main" },
-												"&.active::before": {
-													content: '""',
-													position: "absolute",
-													left: -12,
-													top: 8,
-													bottom: 8,
-													width: 3,
-													borderRadius: "0 3px 3px 0",
-													bgcolor: "primary.main",
-												},
-											}}
-										>
-											<Icon size={18} strokeWidth={1.5} />
-											<span className="flex-1">{label}</span>
-											{badge > 0 && (
+										<WithTooltip collapsed={collapsed} title={label}>
+											<Box
+												component={NavLink}
+												to={to}
+												end={to === "/"}
+												onClick={onNavigate}
+												data-cy={`nav-${id}`}
+												className={itemClass}
+												sx={{
+													color: "sidebar.text",
+													"&:hover": { bgcolor: "sidebar.hover" },
+													"&.active": { bgcolor: "sidebar.active", color: "sidebar.activeText", fontWeight: 600 },
+												}}
+											>
 												<Badge
-													badgeContent={badge}
 													color={id === "agenda" ? "error" : "warning"}
-													sx={{ "& .MuiBadge-badge": { position: "static", transform: "none" } }}
-													aria-label={
-														id === "agenda"
-															? `${badge} atividades para hoje ou atrasadas`
-															: `${badge} trials terminando`
-													}
-												/>
-											)}
-										</Box>
+													variant="dot"
+													invisible={!collapsed || badge === 0}
+													overlap="circular"
+												>
+													<Icon size={18} strokeWidth={1.75} />
+												</Badge>
+												{!collapsed && <span className="flex-1">{label}</span>}
+												{!collapsed && badge > 0 && (
+													<Box
+														component="span"
+														className="min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center"
+														sx={{ bgcolor: id === "agenda" ? "error.main" : "warning.main", color: "#fff" }}
+														aria-label={
+															id === "agenda"
+																? `${badge} atividades atrasadas ou para hoje`
+																: `${badge} trials terminando`
+														}
+													>
+														{badge}
+													</Box>
+												)}
+											</Box>
+										</WithTooltip>
 									</li>
 								);
 							})}
@@ -103,11 +202,93 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 					</div>
 				))}
 			</div>
-			{user && (
-				<Box className="mt-4 rounded-lg p-3 text-xs" sx={{ bgcolor: "sidebar.hover", color: "sidebar.muted" }}>
-					Leads do RD Station chegam automaticamente no Pipeline.
+
+			<div className="space-y-0.5 pt-3 border-t" style={{ borderColor: "var(--mui-palette-sidebar-border)" }}>
+				{collapsed && onToggleCollapsed && (
+					<WithTooltip collapsed title="Expandir menu">
+						<Box
+							component="button"
+							type="button"
+							onClick={onToggleCollapsed}
+							className={`${itemClass} w-full`}
+							sx={{ color: "sidebar.muted", "&:hover": { bgcolor: "sidebar.hover" } }}
+							aria-label="Expandir menu"
+						>
+							<ChevronsRight size={18} strokeWidth={1.75} />
+						</Box>
+					</WithTooltip>
+				)}
+				<WithTooltip collapsed={collapsed} title="Guia de uso">
+					<Box
+						component="button"
+						type="button"
+						onClick={openGuide}
+						className={`${itemClass} w-full`}
+						sx={{ "&:hover": { bgcolor: "sidebar.hover" } }}
+						data-cy="open-guide"
+					>
+						<BookOpen size={18} strokeWidth={1.75} />
+						{!collapsed && <span>Guia de uso</span>}
+					</Box>
+				</WithTooltip>
+				<WithTooltip collapsed={collapsed} title={isDark ? "Tema claro" : "Tema escuro"}>
+					<Box
+						component="button"
+						type="button"
+						onClick={() => setMode(isDark ? "light" : "dark")}
+						className={`${itemClass} w-full`}
+						sx={{ "&:hover": { bgcolor: "sidebar.hover" } }}
+						data-cy="toggle-theme"
+					>
+						{isDark ? <Sun size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}
+						{!collapsed && <span>{isDark ? "Tema claro" : "Tema escuro"}</span>}
+					</Box>
+				</WithTooltip>
+				<Box
+					component="button"
+					type="button"
+					onClick={(e) => setMenuAnchor(e.currentTarget as HTMLElement)}
+					className={`flex items-center gap-2.5 w-full rounded-lg py-1.5 mt-1 text-left ${collapsed ? "justify-center" : "px-1.5"}`}
+					sx={{ "&:hover": { bgcolor: "sidebar.hover" } }}
+					data-cy="user-menu"
+					aria-label="Menu do usuário"
+				>
+					<UserAvatar user={user} size={32} tooltip={false} />
+					{!collapsed && user && (
+						<div className="min-w-0">
+							<Typography variant="body2" fontWeight={600} noWrap>
+								{user.name}
+							</Typography>
+							<Typography variant="caption" sx={{ color: "sidebar.muted" }} noWrap component="div">
+								{ROLE_LABELS[user.role]}
+							</Typography>
+						</div>
+					)}
 				</Box>
-			)}
+				<Menu
+					anchorEl={menuAnchor}
+					open={!!menuAnchor}
+					onClose={() => setMenuAnchor(null)}
+					anchorOrigin={{ vertical: "top", horizontal: "right" }}
+					transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+				>
+					<div className="px-4 py-2 min-w-[220px]">
+						<Typography variant="body2" fontWeight={600}>
+							{user?.name}
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							{user?.email}
+						</Typography>
+					</div>
+					<Divider />
+					<MenuItem onClick={handleLogout} dense data-cy="logout">
+						<ListItemIcon>
+							<LogOut size={18} strokeWidth={1.5} />
+						</ListItemIcon>
+						Sair
+					</MenuItem>
+				</Menu>
+			</div>
 		</Box>
 	);
 }

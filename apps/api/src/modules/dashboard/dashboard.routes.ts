@@ -48,6 +48,7 @@ dashboardRouter.get("/", async (req, res) => {
 				stage: true,
 				status: true,
 				source: true,
+				channel: true,
 				createdAt: true,
 				stageEvents: { select: { toStage: true } },
 			},
@@ -115,6 +116,14 @@ dashboardRouter.get("/", async (req, res) => {
 		sources.set(lead.source, entry);
 	}
 
+	const channels = new Map<string, { channel: string; count: number; won: number }>();
+	for (const lead of createdLeads) {
+		const entry = channels.get(lead.channel) ?? { channel: lead.channel, count: 0, won: 0 };
+		entry.count++;
+		if (lead.status === "WON") entry.won++;
+		channels.set(lead.channel, entry);
+	}
+
 	const leadsPerDay = new Map<string, number>();
 	for (let i = Math.min(days, 90) - 1; i >= 0; i--) {
 		leadsPerDay.set(new Date(now.getTime() - i * DAY).toISOString().slice(0, 10), 0);
@@ -172,6 +181,7 @@ dashboardRouter.get("/", async (req, res) => {
 		funnel: [...funnel, { stage: "WON", count: wonFromCohort }],
 		pipeline,
 		sources: [...sources.values()].sort((a, b) => b.count - a.count),
+		channels: [...channels.values()].sort((a, b) => b.count - a.count),
 		leadsPerDay: [...leadsPerDay.entries()].map(([date, count]) => ({ date, count })),
 		lostReasons: [...lostReasons.entries()]
 			.map(([reason, count]) => ({ reason, count }))

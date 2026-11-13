@@ -9,6 +9,7 @@ const envSchema = z.object({
 	WEB_ORIGIN: z.string().default("http://localhost:5173"),
 	RD_WEBHOOK_TOKEN: z.string().min(8, "RD_WEBHOOK_TOKEN deve ter pelo menos 8 caracteres"),
 	PUBLIC_API_URL: z.string().default("http://localhost:3333"),
+	CAL_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

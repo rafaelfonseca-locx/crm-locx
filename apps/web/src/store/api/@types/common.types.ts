@@ -2,4 +2,11 @@ export type ApiResponse<T> = { success: boolean; data: T; count?: number; messag
 
 export type Role = "ADMIN" | "MANAGER" | "SALES";
 
-export type UserSummary = { id: string; name: string; email: string; color: string; role: Role };
+export type UserSummary = {
+	id: string;
+	name: string;
+	email: string;
+	color: string;
+	role: Role;
+	avatarUrl?: string | null;
+};

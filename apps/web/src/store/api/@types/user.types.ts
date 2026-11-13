@@ -1,6 +1,11 @@
 import type { Role, UserSummary } from "./common.types";
 
-export type CurrentUser = UserSummary & { receivesLeads: boolean; active: boolean };
+export type CurrentUser = UserSummary & {
+	receivesLeads: boolean;
+	active: boolean;
+	mustChangePassword: boolean;
+	onboardedAt: string | null;
+};
 
 export type TeamMember = UserSummary & {
 	active: boolean;

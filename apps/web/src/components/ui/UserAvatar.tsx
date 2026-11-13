@@ -4,11 +4,16 @@ import Avatar from "@mui/material/Avatar";
 import AvatarGroup from "@mui/material/AvatarGroup";
 import Tooltip from "@mui/material/Tooltip";
 
-type UserAvatarProps = { user: Pick<UserSummary, "name" | "color"> | null; size?: number; tooltip?: string | false };
+type UserAvatarProps = {
+	user: Pick<UserSummary, "name" | "color" | "avatarUrl"> | null;
+	size?: number;
+	tooltip?: string | false;
+};
 
 export function UserAvatar({ user, size = 28, tooltip }: UserAvatarProps) {
 	const avatar = (
 		<Avatar
+			src={user?.avatarUrl ?? undefined}
 			sx={{
 				width: size,
 				height: size,

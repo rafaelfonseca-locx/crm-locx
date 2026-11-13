@@ -4,6 +4,8 @@ export type LeadStage = "NEW" | "QUALIFICATION" | "MEETING" | "TRIAL" | "CLOSING
 export type LeadStatus = "OPEN" | "WON" | "LOST";
 export type LeadTemperature = "COLD" | "WARM" | "HOT";
 export type ParticipantRole = "SDR" | "CLOSER" | "ONBOARDING" | "TECHNICAL" | "OBSERVER";
+export type LeadChannel = "DEMO" | "WHATSAPP" | "SITE" | "MANUAL";
+export type BillingCycle = "MONTHLY" | "ANNUAL";
 export type TrialStatus = "ACTIVE" | "CONVERTED" | "EXPIRED" | "CANCELED";
 
 export type TrialChecklistItem = {
@@ -48,8 +50,15 @@ export type Lead = {
 	temperature: LeadTemperature | null;
 	estimatedValue: number | null;
 	plan: string | null;
+	billingCycle: BillingCycle | null;
 	notes: string | null;
 	tags: string[];
+	businessType: string | null;
+	managementRole: string | null;
+	contractsRange: string | null;
+	currentTool: string | null;
+	startTimeline: string | null;
+	channel: LeadChannel;
 	source: string;
 	utmSource: string | null;
 	utmMedium: string | null;
@@ -78,6 +87,7 @@ export type LeadListParams = {
 	ownerId?: string;
 	mine?: boolean;
 	source?: string;
+	channel?: LeadChannel;
 	temperature?: LeadTemperature;
 	skip?: number;
 	take?: number;
@@ -99,9 +109,16 @@ export type LeadPayload = Partial<{
 	temperature: LeadTemperature | null;
 	estimatedValue: number | null;
 	plan: string | null;
+	billingCycle: BillingCycle | null;
 	notes: string | null;
 	tags: string[];
 	source: string;
+	channel: LeadChannel;
+	businessType: string | null;
+	managementRole: string | null;
+	contractsRange: string | null;
+	currentTool: string | null;
+	startTimeline: string | null;
 	ownerId: string | null;
 	stage: LeadStage;
 }>;

@@ -45,6 +45,7 @@ leadsRouter.get("/", async (req, res) => {
 	if (q.status !== "ALL") where.status = q.status;
 	if (q.stage) where.stage = q.stage;
 	if (q.source) where.source = q.source;
+	if (q.channel) where.channel = q.channel;
 	if (q.temperature) where.temperature = q.temperature;
 	if (q.ownerId === "none") where.ownerId = null;
 	else if (q.ownerId) where.ownerId = q.ownerId;

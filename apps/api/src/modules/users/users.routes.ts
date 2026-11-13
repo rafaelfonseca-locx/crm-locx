@@ -40,6 +40,7 @@ usersRouter.get("/", async (req, res) => {
 			email: true,
 			role: true,
 			color: true,
+			avatarUrl: true,
 			active: true,
 			receivesLeads: true,
 			lastAssignedAt: true,
@@ -77,8 +78,17 @@ usersRouter.post("/", async (req, res) => {
 	if (body.role === "ADMIN" && req.user.role !== "ADMIN")
 		throw new HttpError(403, "Somente administradores criam administradores");
 	const user = await prisma.user.create({
-		data: { ...body, passwordHash: await hashPassword(password) },
-		select: { id: true, name: true, email: true, role: true, color: true, active: true, receivesLeads: true },
+		data: { ...body, passwordHash: await hashPassword(password), mustChangePassword: true },
+		select: {
+			id: true,
+			name: true,
+			email: true,
+			role: true,
+			color: true,
+			avatarUrl: true,
+			active: true,
+			receivesLeads: true,
+		},
 	});
 	return ok(res, user, undefined, 201);
 });
@@ -93,8 +103,18 @@ usersRouter.patch("/:id", async (req, res) => {
 		throw new HttpError(403, "Somente administradores criam administradores");
 	const user = await prisma.user.update({
 		where: { id: req.params.id },
-		data: { ...body, ...(password ? { passwordHash: await hashPassword(password) } : {}) },
-		select: { id: true, name: true, email: true, role: true, color: true, active: true, receivesLeads: true },
+		// Senha redefinida pela gestão vale só até o próximo acesso
+		data: { ...body, ...(password ? { passwordHash: await hashPassword(password), mustChangePassword: true } : {}) },
+		select: {
+			id: true,
+			name: true,
+			email: true,
+			role: true,
+			color: true,
+			avatarUrl: true,
+			active: true,
+			receivesLeads: true,
+		},
 	});
 	return ok(res, user);
 });

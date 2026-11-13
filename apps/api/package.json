@@ -4,7 +4,7 @@
 	"version": "0.1.0",
 	"type": "module",
 	"scripts": {
-		"dev": "tsx watch src/index.ts",
+		"dev": "prisma generate && tsx watch src/index.ts",
 		"build": "prisma generate && tsc -p tsconfig.json",
 		"start": "node dist/index.js",
 		"test": "vitest run",
@@ -12,9 +12,12 @@
 		"db:migrate": "prisma migrate dev",
 		"db:deploy": "prisma migrate deploy",
 		"db:seed": "tsx prisma/seed.ts",
-		"db:reset": "prisma migrate reset --force"
+		"db:reset": "prisma migrate reset --force",
+		"db:clear": "tsx prisma/clear.ts"
 	},
-	"prisma": { "seed": "tsx prisma/seed.ts" },
+	"prisma": {
+		"seed": "tsx prisma/seed.ts"
+	},
 	"dependencies": {
 		"@prisma/client": "6.19.3",
 		"bcryptjs": "3.0.2",

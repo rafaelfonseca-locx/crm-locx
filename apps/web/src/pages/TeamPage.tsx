@@ -251,7 +251,7 @@ export function TeamPage() {
 					) : (
 						<div className="space-y-4">
 							{!isManager && (
-								<Alert severity="info">Somente a gestão comercial pode adicionar pessoas ou alterar o rodízio.</Alert>
+								<Alert severity="info">Somente gestores podem adicionar pessoas ou alterar o rodízio de leads.</Alert>
 							)}
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 								{members.map((member) => (

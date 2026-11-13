@@ -2,11 +2,12 @@ import { PageActions, PageHeader, PageSimple, PageTitle } from "@/components/lay
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StageChip } from "@/components/ui/StageChip";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { ChannelIcon } from "@/features/leads/components/ChannelIcon";
 import { NextActivityLabel } from "@/features/leads/components/NextActivityLabel";
 import { useLeadDialogs } from "@/features/leads/components/dialogs/LeadDialogsProvider";
-import { STAGE_META, STAGE_ORDER } from "@/features/leads/constants";
+import { CHANNEL_META, STAGE_META, STAGE_ORDER } from "@/features/leads/constants";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import type { Lead, LeadStage, LeadStatus } from "@/store/api/@types/lead.types";
+import type { Lead, LeadChannel, LeadStage, LeadStatus } from "@/store/api/@types/lead.types";
 import { useGetLeadsQuery, useGetUsersQuery } from "@/store/api/hooks";
 import { formatCurrency, formatShortDate } from "@/utils/formatters";
 import Button from "@mui/material/Button";
@@ -29,7 +30,13 @@ import { MRT_Localization_PT_BR } from "material-react-table/locales/pt-BR";
 import { useDeferredValue, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
-type ListFilters = { status: LeadStatus | "ALL"; stage: LeadStage | ""; ownerId: string; scope: "all" | "mine" };
+type ListFilters = {
+	status: LeadStatus | "ALL";
+	stage: LeadStage | "";
+	ownerId: string;
+	scope: "all" | "mine";
+	channel: LeadChannel | "";
+};
 
 export function LeadsListingPage() {
 	const navigate = useNavigate();
@@ -40,6 +47,7 @@ export function LeadsListingPage() {
 		stage: "",
 		ownerId: "",
 		scope: "all",
+		channel: "",
 	});
 	const [search, setSearch] = useState("");
 	const deferredSearch = useDeferredValue(search.trim());
@@ -50,6 +58,7 @@ export function LeadsListingPage() {
 		status: filters.status,
 		stage: filters.stage || undefined,
 		ownerId: filters.ownerId || undefined,
+		channel: filters.channel || undefined,
 		mine: filters.scope === "mine",
 		search: deferredSearch || undefined,
 		skip: pagination.pageIndex * pagination.pageSize,
@@ -112,7 +121,18 @@ export function LeadsListingPage() {
 				Cell: ({ row }) =>
 					row.original.status === "OPEN" ? <NextActivityLabel activity={row.original.nextActivity} /> : "N/A",
 			},
-			{ accessorKey: "source", header: "Origem", enableSorting: false, size: 120 },
+			{
+				id: "channel",
+				header: "Canal",
+				enableSorting: false,
+				size: 140,
+				Cell: ({ row }) => (
+					<span className="inline-flex items-center gap-1.5">
+						<ChannelIcon channel={row.original.channel} />
+						{CHANNEL_META[row.original.channel].short}
+					</span>
+				),
+			},
 			{
 				accessorKey: "createdAt",
 				header: "Criado em",
@@ -230,6 +250,22 @@ export function LeadsListingPage() {
 							<MenuItem value="WON">Ganhos</MenuItem>
 							<MenuItem value="LOST">Perdidos</MenuItem>
 							<MenuItem value="ALL">Todos</MenuItem>
+						</TextField>
+						<TextField
+							select
+							size="small"
+							label="Canal"
+							value={filters.channel}
+							onChange={(e) => update({ channel: e.target.value as LeadChannel | "" })}
+							sx={{ width: 160 }}
+							fullWidth={false}
+						>
+							<MenuItem value="">Todos</MenuItem>
+							{Object.entries(CHANNEL_META).map(([k, m]) => (
+								<MenuItem key={k} value={k}>
+									{m.short}
+								</MenuItem>
+							))}
 						</TextField>
 						<TextField
 							select

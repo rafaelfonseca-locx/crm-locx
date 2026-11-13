@@ -44,4 +44,5 @@ export const {
 	useGetRdIntegrationQuery,
 	useUpdateAssignmentModeMutation,
 	useSendRdTestLeadMutation,
+	useSendCalTestBookingMutation,
 } = dashboardApi;

@@ -55,6 +55,18 @@ enum ActivityType {
   SYSTEM
 }
 
+enum LeadChannel {
+  DEMO // Agendou demonstração (formulário completo + Cal.com)
+  WHATSAPP // Formulário do WhatsApp: exige pré-atendimento
+  SITE // Formulário da página
+  MANUAL // Cadastro manual, indicação, evento...
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
 enum TrialStatus {
   ACTIVE
   CONVERTED
@@ -69,6 +81,10 @@ model User {
   passwordHash   String
   role           Role      @default(SALES)
   color          String    @default("#FFCC00")
+  avatarUrl      String?
+  // Primeiro acesso: obriga a trocar a senha inicial
+  mustChangePassword Boolean   @default(false)
+  onboardedAt    DateTime?
   active         Boolean   @default(true)
   // Participa do rodízio de distribuição de leads vindos do RD Station
   receivesLeads  Boolean   @default(true)
@@ -102,11 +118,20 @@ model Lead {
   // Valor mensal estimado (MRR) da oportunidade
   estimatedValue Decimal?         @db.Decimal(12, 2)
   plan           String?
+  billingCycle   BillingCycle?
   notes          String?
   tags           String[]         @default([])
 
+  // Qualificação (perguntas padronizadas dos formulários)
+  businessType   String? // Perfil / qualificação do negócio
+  managementRole String? // Papel na gestão dos imóveis
+  contractsRange String? // Quantos contratos de aluguel administra
+  currentTool    String? // Como gerencia hoje
+  startTimeline  String? // Quando pretende começar
+
   // Origem
-  source               String  @default("Manual")
+  channel              LeadChannel @default(MANUAL)
+  source               String      @default("Manual")
   utmSource            String?
   utmMedium            String?
   utmCampaign          String?
@@ -133,6 +158,7 @@ model Lead {
   @@index([ownerId])
   @@index([email])
   @@index([createdAt])
+  @@index([channel])
 }
 
 // Outras pessoas adicionadas ao processo de um lead, além do responsável
@@ -159,6 +185,8 @@ model Activity {
   dueAt       DateTime?
   completedAt DateTime?
   meetingUrl  String?
+  // Id do agendamento no Cal.com, para remarcar e cancelar
+  externalId  String?      @unique
   metadata    Json?
   authorId    String?
   author      User?        @relation("ActivityAuthor", fields: [authorId], references: [id], onDelete: SetNull)

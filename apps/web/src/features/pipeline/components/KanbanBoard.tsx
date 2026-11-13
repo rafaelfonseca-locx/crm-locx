@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/ui/EmptyState";
+import { InfoTip } from "@/components/ui/InfoTip";
 import { useLeadDialogs } from "@/features/leads/components/dialogs/LeadDialogsProvider";
 import { STAGE_META, STAGE_ORDER } from "@/features/leads/constants";
 import { useNotify } from "@/hooks/useNotify";
@@ -19,14 +20,16 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import Box from "@mui/material/Box";
+import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import { CircleCheck, CircleX, Info } from "lucide-react";
+import { CircleCheck, CircleX, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { LeadCard } from "./LeadCard";
 
 type DropTarget = LeadStage | "WON" | "LOST";
+const ARROW = 12;
 
 function DraggableLead({ lead, onClaim }: { lead: Lead; onClaim: (lead: Lead) => void }) {
 	const navigate = useNavigate();
@@ -43,64 +46,91 @@ function DraggableLead({ lead, onClaim }: { lead: Lead; onClaim: (lead: Lead) =>
 				if (e.key === "Enter") navigate(`/leads/${lead.id}`);
 				listeners?.onKeyDown?.(e);
 			}}
-			className="outline-none rounded-xl focus-visible:ring-2 focus-visible:ring-[var(--mui-palette-primary-main)]"
+			className="outline-none rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--mui-palette-primary-main)]"
 		>
 			<LeadCard lead={lead} isDragging={isDragging} onClaim={onClaim} />
 		</div>
 	);
 }
 
+/** Cabeçalho em seta, como uma trilha: etapa, valor somado e quantidade. */
+function StageHeader({
+	stage,
+	index,
+	leads,
+	onAdd,
+}: { stage: LeadStage; index: number; leads: Lead[]; onAdd?: () => void }) {
+	const stageColor = useStageColor();
+	const total = leads.reduce((acc, l) => acc + (l.estimatedValue ?? 0), 0);
+	const isFirst = index === 0;
+	const isLast = index === STAGE_ORDER.length - 1;
+	const clip = `polygon(0 0, ${isLast ? "100%" : `calc(100% - ${ARROW}px)`} 0, 100% 50%, ${isLast ? "100%" : `calc(100% - ${ARROW}px)`} 100%, 0 100%, ${isFirst ? "0" : `${ARROW}px`} 50%)`;
+
+	return (
+		<Box
+			className="group relative h-[52px] flex items-center gap-2 pr-5"
+			sx={{
+				clipPath: clip,
+				bgcolor: "background.paper",
+				pl: isFirst ? 1.5 : 3,
+				mr: isLast ? 0 : `-${ARROW - 4}px`,
+				boxShadow: `inset 0 -2px 0 ${stageColor(stage)}`,
+			}}
+		>
+			<div className="min-w-0 flex-1">
+				<div className="flex items-center gap-1">
+					<Typography variant="body2" fontWeight={700} noWrap>
+						{STAGE_META[stage].label}
+					</Typography>
+					<InfoTip title={STAGE_META[stage].description} size={13} />
+				</div>
+				<Typography variant="caption" color="text.secondary" className="tabular-nums" noWrap component="div">
+					{total > 0 ? `${formatCompactCurrency(total)}/mês · ` : ""}
+					{leads.length} {leads.length === 1 ? "lead" : "leads"}
+				</Typography>
+			</div>
+			{onAdd && (
+				<Tooltip title={`Novo lead em ${STAGE_META[stage].label}`}>
+					<IconButton
+						size="small"
+						onClick={onAdd}
+						className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+						aria-label={`Novo lead em ${STAGE_META[stage].label}`}
+					>
+						<Plus size={16} strokeWidth={2} />
+					</IconButton>
+				</Tooltip>
+			)}
+		</Box>
+	);
+}
+
 function StageColumn({ stage, leads, onClaim }: { stage: LeadStage; leads: Lead[]; onClaim: (lead: Lead) => void }) {
 	const { setNodeRef, isOver } = useDroppable({ id: stage });
 	const stageColor = useStageColor();
-	const total = leads.reduce((acc, l) => acc + (l.estimatedValue ?? 0), 0);
-	const color = stageColor(stage);
-
 	return (
-		<section
-			className="flex flex-col flex-1 min-w-[236px] max-w-[340px] max-h-full"
-			aria-label={`Etapa ${STAGE_META[stage].label}`}
+		<Box
+			ref={setNodeRef}
+			className="flex-1 min-h-0 overflow-y-auto scrollbar-none p-1.5 space-y-1.5"
+			sx={{
+				bgcolor: isOver ? "action.selected" : "transparent",
+				outline: isOver ? `2px dashed ${stageColor(stage)}` : "none",
+				outlineOffset: -3,
+				borderRadius: 2,
+				transition: "background-color 120ms",
+			}}
+			aria-label={`Leads em ${STAGE_META[stage].label}`}
 			data-cy={`stage-column-${stage}`}
 		>
-			<Box
-				className="rounded-t-xl px-3 pt-3 pb-2.5 border border-b-0"
-				sx={{ bgcolor: "background.paper", borderTop: `3px solid ${color} !important` }}
-			>
-				<div className="flex items-center gap-2">
-					<Typography variant="body2" fontWeight={700}>
-						{STAGE_META[stage].label}
-					</Typography>
-					<Box className="px-1.5 rounded text-xs font-semibold tabular-nums" sx={{ bgcolor: "action.selected" }}>
-						{leads.length}
-					</Box>
-					<Tooltip title={STAGE_META[stage].description}>
-						<Info size={14} strokeWidth={1.5} className="opacity-50" />
-					</Tooltip>
-				</div>
-				<Typography variant="caption" color="text.secondary" className="tabular-nums">
-					{total > 0 ? `${formatCompactCurrency(total)}/mês estimado` : "Sem valor estimado"}
+			{leads.map((lead) => (
+				<DraggableLead key={lead.id} lead={lead} onClaim={onClaim} />
+			))}
+			{leads.length === 0 && (
+				<Typography variant="caption" color="text.disabled" className="block text-center py-10">
+					Arraste um lead para cá
 				</Typography>
-			</Box>
-			<Box
-				ref={setNodeRef}
-				className="flex-1 overflow-y-auto scrollbar-thin rounded-b-xl border border-t-0 p-2 space-y-2 min-h-[160px]"
-				sx={{
-					bgcolor: isOver ? "action.selected" : "action.hover",
-					outline: isOver ? `2px dashed ${color}` : "none",
-					outlineOffset: -4,
-					transition: "background-color 120ms",
-				}}
-			>
-				{leads.map((lead) => (
-					<DraggableLead key={lead.id} lead={lead} onClaim={onClaim} />
-				))}
-				{leads.length === 0 && (
-					<Typography variant="caption" color="text.disabled" className="block text-center py-8">
-						Arraste um lead para cá
-					</Typography>
-				)}
-			</Box>
-		</section>
+			)}
+		</Box>
 	);
 }
 
@@ -119,21 +149,20 @@ function OutcomeDropZone({ id, label, active }: { id: "WON" | "LOST"; label: str
 				transform: active ? "translateY(0)" : "translateY(160%)",
 				visibility: active ? "visible" : "hidden",
 				opacity: active ? 1 : 0,
-				boxShadow: 8,
+				boxShadow: "0 12px 32px rgba(0,0,0,0.16)",
 			}}
 		>
-			<Icon size={20} strokeWidth={1.5} /> {label}
+			<Icon size={20} strokeWidth={1.75} /> {label}
 		</Box>
 	);
 }
 
 export function KanbanBoard({ leads }: { leads: Lead[] }) {
-	const { requestStageChange, openWin, openLose } = useLeadDialogs();
+	const { requestStageChange, openWin, openLose, openCreateLeadInStage } = useLeadDialogs();
 	const notify = useNotify();
 	const [claimLead] = useClaimLeadMutation();
 	const [activeLead, setActiveLead] = useState<Lead | null>(null);
 	const [pendingMoves, setPendingMoves] = useState<Record<number, LeadStage>>({});
-
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
 		useSensor(KeyboardSensor),
@@ -174,7 +203,7 @@ export function KanbanBoard({ leads }: { leads: Lead[] }) {
 		return (
 			<EmptyState
 				title="Nenhum lead em aberto"
-				description="Ajuste os filtros ou cadastre um novo lead. Leads do RD Station entram automaticamente em Novo lead."
+				description="Ajuste os filtros ou cadastre um novo lead. Leads do RD Station entram em Novo lead e os do Cal.com em Reunião."
 			/>
 		);
 	}
@@ -186,13 +215,32 @@ export function KanbanBoard({ leads }: { leads: Lead[] }) {
 			onDragEnd={handleDragEnd}
 			onDragCancel={() => setActiveLead(null)}
 		>
-			<div className="flex gap-3 overflow-x-auto scrollbar-thin pb-3 h-[calc(100vh-240px)] min-h-[480px]">
-				{STAGE_ORDER.map((stage) => (
-					<StageColumn key={stage} stage={stage} leads={columns[stage]} onClaim={handleClaim} />
-				))}
+			<div className="flex flex-col h-full min-h-0 min-w-[1000px]">
+				<div
+					className="flex shrink-0 rounded-t-xl overflow-hidden border-b"
+					style={{ filter: "drop-shadow(0 1px 1px rgba(16,24,40,0.04))" }}
+				>
+					{STAGE_ORDER.map((stage, index) => (
+						<div key={stage} className="flex-1 min-w-0" style={{ zIndex: STAGE_ORDER.length - index }}>
+							<StageHeader
+								stage={stage}
+								index={index}
+								leads={columns[stage]}
+								onAdd={stage === "TRIAL" ? undefined : () => openCreateLeadInStage(stage)}
+							/>
+						</div>
+					))}
+				</div>
+				<Box className="flex flex-1 min-h-0 gap-1 rounded-b-xl pt-1" sx={{ bgcolor: "surface.column" }}>
+					{STAGE_ORDER.map((stage) => (
+						<div key={stage} className="flex-1 min-w-0 flex flex-col min-h-0">
+							<StageColumn stage={stage} leads={columns[stage]} onClaim={handleClaim} />
+						</div>
+					))}
+				</Box>
 			</div>
 			<div
-				className="fixed bottom-5 left-0 right-0 lg:left-[248px] z-30 flex justify-center px-6 pointer-events-none"
+				className="fixed bottom-6 left-0 right-0 z-30 flex justify-center px-6 pointer-events-none"
 				aria-hidden={!activeLead}
 			>
 				<div className={`flex gap-4 w-full max-w-2xl ${activeLead ? "pointer-events-auto" : ""}`}>
@@ -201,7 +249,7 @@ export function KanbanBoard({ leads }: { leads: Lead[] }) {
 				</div>
 			</div>
 			<DragOverlay dropAnimation={null}>
-				{activeLead && <LeadCard lead={activeLead} isOverlay style={{ width: 280 }} />}
+				{activeLead && <LeadCard lead={activeLead} isOverlay style={{ width: 240 }} />}
 			</DragOverlay>
 		</DndContext>
 	);

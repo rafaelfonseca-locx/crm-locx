@@ -58,7 +58,13 @@ export const leadsApi = apiService.injectEndpoints({
 		}),
 		winLead: build.mutation<
 			ApiResponse<Lead>,
-			{ id: number; estimatedValue?: number | null; plan?: string | null; note?: string | null }
+			{
+				id: number;
+				estimatedValue?: number | null;
+				plan?: string | null;
+				billingCycle?: "MONTHLY" | "ANNUAL" | null;
+				note?: string | null;
+			}
 		>({
 			query: ({ id, ...body }) => ({ url: `/leads/${id}/win`, method: "POST", body }),
 			invalidatesTags: (_r, _e, { id }) => leadChanged(id),

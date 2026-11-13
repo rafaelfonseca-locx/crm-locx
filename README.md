@@ -62,6 +62,12 @@ npm install
 cp apps/api/.env.example apps/api/.env
 ```
 
+No Windows (PowerShell):
+
+```powershell
+Copy-Item apps/api/.env.example apps/api/.env
+```
+
 ```bash
 npm run db:migrate && npm run db:seed
 ```

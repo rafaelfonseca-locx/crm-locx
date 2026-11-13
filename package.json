@@ -3,9 +3,12 @@
 	"private": true,
 	"version": "0.1.0",
 	"description": "CRM comercial da LocX: do lead do RD Station à venda, com acompanhamento de trial",
-	"workspaces": ["apps/api", "apps/web"],
+	"workspaces": [
+		"apps/api",
+		"apps/web"
+	],
 	"scripts": {
-		"dev": "npm run dev --workspace apps/api & npm run dev --workspace apps/web",
+		"dev": "concurrently -n api,web -c yellow,cyan \"npm:dev:api\" \"npm:dev:web\"",
 		"dev:api": "npm run dev --workspace apps/api",
 		"dev:web": "npm run dev --workspace apps/web",
 		"build": "npm run build --workspace apps/api && npm run build --workspace apps/web",
@@ -15,7 +18,8 @@
 		"lint": "biome check apps"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4"
+		"@biomejs/biome": "1.9.4",
+		"concurrently": "9.1.2"
 	},
 	"engines": {
 		"node": ">=20"

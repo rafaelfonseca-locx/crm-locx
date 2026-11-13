@@ -2,6 +2,7 @@ import { StageChip } from "@/components/ui/StageChip";
 import { useLeadDialogs } from "@/features/leads/components/dialogs/LeadDialogsProvider";
 import { useGetLeadsQuery } from "@/store/api/hooks";
 import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
 import InputBase from "@mui/material/InputBase";
 import Typography from "@mui/material/Typography";
@@ -38,7 +39,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 	const listRef = useRef<HTMLDivElement>(null);
 	const search = useDebounced(query.trim().replace(/^#/, ""));
 	const { data, isFetching } = useGetLeadsQuery(
-		{ search, status: "ALL", take: 8 },
+		{ search, status: "ALL", kind: "ALL", take: 8 },
 		{ skip: !open || search.length < 2 },
 	);
 
@@ -62,7 +63,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 						group: "Leads",
 						label: lead.companyName ?? lead.name,
 						hint: [lead.companyName ? lead.name : null, lead.email, `#${lead.id}`].filter(Boolean).join(" · "),
-						right: <StageChip stage={lead.stage} status={lead.status} />,
+						right:
+							lead.kind === "PARTNER" ? (
+								<Chip size="small" variant="outlined" color="info" label="Parceiro" />
+							) : (
+								<StageChip stage={lead.stage} status={lead.status} />
+							),
 						run: close(() => navigate(`/leads/${lead.id}`)),
 					}))
 				: [];

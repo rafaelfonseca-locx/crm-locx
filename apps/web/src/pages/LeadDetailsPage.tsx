@@ -15,6 +15,7 @@ import { StagePath } from "@/features/leads/components/details/StagePath";
 import { TeamCard } from "@/features/leads/components/details/TeamCard";
 import { TrialPanel } from "@/features/leads/components/details/TrialPanel";
 import { useLeadDialogs } from "@/features/leads/components/dialogs/LeadDialogsProvider";
+import { PartnerReferrals } from "@/features/partners/PartnerReferrals";
 import { getTrialProgress, trialDaysLeftLabel } from "@/features/trials/trialProgress";
 import { useAskDialog } from "@/hooks/useAskDialog";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,6 +25,7 @@ import {
 	useDeleteLeadMutation,
 	useGetLeadByIdQuery,
 	useReopenLeadMutation,
+	useSetLeadKindMutation,
 } from "@/store/api/hooks";
 import { formatCurrency, formatShortDate } from "@/utils/formatters";
 import Alert from "@mui/material/Alert";
@@ -43,14 +45,16 @@ import {
 	CircleX,
 	EllipsisVertical,
 	FlaskConical,
+	Handshake,
 	Pencil,
+	Plus,
 	RotateCcw,
 	Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
-const TABS = ["atividades", "trial", "historico"] as const;
+const TABS = ["atividades", "trial", "historico", "indicacoes"] as const;
 type TabKey = (typeof TABS)[number];
 
 export function LeadDetailsPage() {
@@ -68,9 +72,17 @@ export function LeadDetailsPage() {
 	const [deleteLead] = useDeleteLeadMutation();
 	const [claimLead, { isLoading: isClaiming }] = useClaimLeadMutation();
 
+	const [setLeadKind] = useSetLeadKindMutation();
+	const isPartner = data?.data.kind === "PARTNER";
+
+	// Parceiro abre nas indicações; cliente em potencial, nas atividades
+	const defaultTab: TabKey = isPartner ? "indicacoes" : "atividades";
+	const allowedTabs: readonly TabKey[] = isPartner
+		? ["indicacoes", "atividades"]
+		: ["atividades", "trial", "historico"];
 	const tabParam = searchParams.get("aba") as TabKey | null;
-	const tab: TabKey = tabParam && TABS.includes(tabParam) ? tabParam : "atividades";
-	const setTab = (value: TabKey) => setSearchParams(value === "atividades" ? {} : { aba: value }, { replace: true });
+	const tab: TabKey = tabParam && allowedTabs.includes(tabParam) ? tabParam : defaultTab;
+	const setTab = (value: TabKey) => setSearchParams(value === defaultTab ? {} : { aba: value }, { replace: true });
 
 	if (isLoading) return <LoadingContent />;
 	if (isError || !data) {
@@ -109,6 +121,22 @@ export function LeadDetailsPage() {
 		}
 	};
 
+	const handleToggleKind = async () => {
+		setMenuAnchor(null);
+		const kind = isPartner ? "PROSPECT" : "PARTNER";
+		try {
+			await setLeadKind({ id: lead.id, kind }).unwrap();
+			notify.success(
+				kind === "PARTNER"
+					? "Marcado como parceiro: saiu do funil de vendas"
+					: "Voltou ao funil como cliente em potencial",
+			);
+			setSearchParams({}, { replace: true });
+		} catch (error) {
+			notify.apiError(error);
+		}
+	};
+
 	const handleDelete = () => {
 		setMenuAnchor(null);
 		askBeforeDelete({
@@ -140,8 +168,19 @@ export function LeadDetailsPage() {
 									<Typography component="h1" className="text-xl font-bold truncate">
 										{lead.companyName ?? lead.name}
 									</Typography>
-									<StageChip stage={lead.stage} status={lead.status} />
-									{activeTrial && (
+									{isPartner ? (
+										<Chip
+											size="small"
+											color="info"
+											variant="outlined"
+											icon={<Handshake size={14} strokeWidth={1.5} />}
+											label="Parceiro"
+											data-cy="lead-partner-chip"
+										/>
+									) : (
+										<StageChip stage={lead.stage} status={lead.status} />
+									)}
+									{!isPartner && activeTrial && (
 										<Chip
 											size="small"
 											icon={<FlaskConical size={13} strokeWidth={1.5} />}
@@ -154,12 +193,30 @@ export function LeadDetailsPage() {
 								<Typography variant="body2" color="text.secondary" className="truncate">
 									#{lead.id} · {lead.name}
 									{lead.jobTitle ? ` · ${lead.jobTitle}` : ""}
-									{lead.estimatedValue !== null ? ` · ${formatCurrency(lead.estimatedValue)}/mês` : ""}
+									{!isPartner && lead.estimatedValue !== null ? ` · ${formatCurrency(lead.estimatedValue)}/mês` : ""}
 								</Typography>
 							</div>
 						</div>
 						<PageActions>
-							{isOpen ? (
+							{isPartner ? (
+								<>
+									<Button
+										variant="outlined"
+										color="inherit"
+										startIcon={<CalendarPlus size={16} strokeWidth={1.5} />}
+										onClick={() => dialogs.openScheduleMeeting(lead)}
+									>
+										Agendar reunião
+									</Button>
+									<Button
+										startIcon={<Plus size={16} strokeWidth={1.5} />}
+										onClick={() => dialogs.openCreateReferral(lead.id)}
+										data-cy="lead-action-referral"
+									>
+										Nova indicação
+									</Button>
+								</>
+							) : isOpen ? (
 								<>
 									<Button
 										variant="outlined"
@@ -231,6 +288,12 @@ export function LeadDetailsPage() {
 									</ListItemIcon>
 									Editar
 								</MenuItem>
+								<MenuItem dense onClick={handleToggleKind} data-cy="lead-action-toggle-partner">
+									<ListItemIcon>
+										<Handshake size={18} strokeWidth={1.5} />
+									</ListItemIcon>
+									{isPartner ? "Voltar para o funil (cliente em potencial)" : "Marcar como parceiro"}
+								</MenuItem>
 								<MenuItem dense onClick={handleDelete} disabled={!isManager} data-cy="lead-action-delete">
 									<ListItemIcon>
 										<Trash2 size={18} strokeWidth={1.5} color="var(--mui-palette-error-main)" />
@@ -240,20 +303,28 @@ export function LeadDetailsPage() {
 							</Menu>
 						</PageActions>
 					</PageHeader>
-					<StagePath lead={lead} onSelect={(stage) => dialogs.requestStageChange(lead, stage)} />
-					{lead.status === "WON" && (
+					{isPartner && (
+						<Alert severity="info" icon={<Handshake size={20} strokeWidth={1.5} />}>
+							Parceiro: não vendemos para ele, vendemos por ele. Fica fora do pipeline e das vendas; acompanhe aqui as
+							indicações que ele trouxer.
+						</Alert>
+					)}
+					{!isPartner && <StagePath lead={lead} onSelect={(stage) => dialogs.requestStageChange(lead, stage)} />}
+					{!isPartner && lead.status === "WON" && (
 						<Alert severity="success" icon={<CircleCheck size={20} strokeWidth={1.5} />}>
 							Venda ganha em {formatShortDate(lead.wonAt)}
+							{lead.closedBy ? ` por ${lead.closedBy.name}` : ""}
 							{lead.estimatedValue !== null ? ` · ${formatCurrency(lead.estimatedValue)}/mês` : ""}
 							{lead.plan ? ` · plano ${lead.plan}` : ""}
 						</Alert>
 					)}
-					{lead.status === "LOST" && (
+					{!isPartner && lead.status === "LOST" && (
 						<Alert severity="error" icon={<CircleX size={20} strokeWidth={1.5} />}>
-							Perdido em {formatShortDate(lead.lostAt)} · motivo: {lead.lostReason}
+							Perdido em {formatShortDate(lead.lostAt)}
+							{lead.closedBy ? ` por ${lead.closedBy.name}` : ""} · motivo: {lead.lostReason}
 						</Alert>
 					)}
-					{!lead.owner && isOpen && (
+					{!lead.owner && (isOpen || isPartner) && (
 						<Alert
 							severity="warning"
 							action={
@@ -277,25 +348,31 @@ export function LeadDetailsPage() {
 				<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 					<div className="lg:col-span-8 space-y-4 min-w-0">
 						<Tabs value={tab} onChange={(_, v: TabKey) => setTab(v)} aria-label="Seções do lead">
+							{isPartner && <Tab value="indicacoes" label="Indicações" data-cy="tab-referrals" />}
 							<Tab value="atividades" label="Atividades" data-cy="tab-activities" />
-							<Tab
-								value="trial"
-								label={
-									<span className="flex items-center gap-1.5">
-										Trial
-										{activeTrial &&
-											(activeTrial.isEndingSoon || activeTrial.isExpired || activeTrial.overdueItems > 0) && (
-												<span
-													className="w-2 h-2 rounded-full bg-[var(--mui-palette-warning-main)]"
-													aria-label="requer atenção"
-												/>
-											)}
-									</span>
-								}
-								data-cy="tab-trial"
-							/>
-							<Tab value="historico" label="Histórico de etapas" data-cy="tab-history" />
+							{!isPartner && (
+								<Tab
+									value="trial"
+									label={
+										<span className="flex items-center gap-1.5">
+											Trial
+											{activeTrial &&
+												(activeTrial.isEndingSoon || activeTrial.isExpired || activeTrial.overdueItems > 0) && (
+													<span
+														className="w-2 h-2 rounded-full bg-[var(--mui-palette-warning-main)]"
+														aria-label="requer atenção"
+													/>
+												)}
+										</span>
+									}
+									data-cy="tab-trial"
+								/>
+							)}
+							{!isPartner && <Tab value="historico" label="Histórico de etapas" data-cy="tab-history" />}
 						</Tabs>
+						{tab === "indicacoes" && (
+							<PartnerReferrals partner={lead} onNewReferral={() => dialogs.openCreateReferral(lead.id)} />
+						)}
 						{tab === "atividades" && (
 							<div className="space-y-4">
 								<ActivityComposer lead={lead} />
@@ -308,9 +385,9 @@ export function LeadDetailsPage() {
 					</div>
 					<aside className="lg:col-span-4 space-y-4">
 						<TeamCard lead={lead} />
-						<QualificationCard lead={lead} onEdit={() => dialogs.openEditLead(lead)} />
+						{!isPartner && <QualificationCard lead={lead} onEdit={() => dialogs.openEditLead(lead)} />}
 						<ContactCard lead={lead} onEdit={() => dialogs.openEditLead(lead)} />
-						<OpportunityCard lead={lead} />
+						{!isPartner && <OpportunityCard lead={lead} />}
 						<OriginCard lead={lead} />
 					</aside>
 				</div>

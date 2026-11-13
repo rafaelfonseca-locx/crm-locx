@@ -55,6 +55,11 @@ enum ActivityType {
   SYSTEM
 }
 
+enum LeadKind {
+  PROSPECT // Cliente em potencial: passa pelo funil de vendas
+  PARTNER // Parceiro: vende por nós e indica clientes; fica fora do funil
+}
+
 enum LeadChannel {
   DEMO // Agendou demonstração (formulário completo + Cal.com)
   WHATSAPP // Formulário do WhatsApp: exige pré-atendimento
@@ -120,6 +125,11 @@ model Lead {
   state          String?
   stage          LeadStage        @default(NEW)
   status         LeadStatus       @default(OPEN)
+  kind           LeadKind         @default(PROSPECT)
+  // Parceiro que indicou este lead
+  referredById   Int?
+  referredBy     Lead?            @relation("LeadReferral", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals      Lead[]           @relation("LeadReferral")
   temperature    LeadTemperature?
   // Valor mensal estimado (MRR) da oportunidade
   estimatedValue Decimal?         @db.Decimal(12, 2)
@@ -167,6 +177,7 @@ model Lead {
   @@index([email])
   @@index([createdAt])
   @@index([channel])
+  @@index([kind])
 }
 
 // Outras pessoas adicionadas ao processo de um lead, além do responsável

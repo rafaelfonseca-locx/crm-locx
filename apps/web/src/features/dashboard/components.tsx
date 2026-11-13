@@ -6,6 +6,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 
 /** Cor única para gráficos de uma série: amarelo LocX (um tom mais fechado no claro, para contraste). Os valores sempre aparecem escritos. */
 export function useSeriesColor() {
@@ -53,12 +54,19 @@ type KpiTileProps = {
 	delta?: number | null;
 	icon: ReactNode;
 	info?: string;
+	/** Torna o indicador clicável (ex.: abre a lista filtrada) */
+	to?: string;
 };
 
 /** Indicador único: o número é o protagonista, sem gráfico. */
-export function KpiTile({ label, value, hint, delta, icon, info }: KpiTileProps) {
+export function KpiTile({ label, value, hint, delta, icon, info, to }: KpiTileProps) {
 	return (
-		<Paper className="rounded-xl p-4 flex flex-col gap-2 min-w-0" sx={{ border: 1, borderColor: "divider" }}>
+		<Paper
+			component={to ? Link : "div"}
+			{...(to ? { to } : {})}
+			className="rounded-xl p-4 flex flex-col gap-2 min-w-0"
+			sx={{ border: 1, borderColor: "divider", ...(to ? { "&:hover": { borderColor: "text.disabled" } } : {}) }}
+		>
 			<div className="flex items-center justify-between gap-2">
 				<div className="flex items-center gap-1 min-w-0">
 					<Typography variant="caption" color="text.secondary" fontWeight={500} noWrap>

@@ -15,6 +15,8 @@ import InputAdornment from "@mui/material/InputAdornment";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
@@ -27,8 +29,8 @@ import {
 	useMaterialReactTable,
 } from "material-react-table";
 import { MRT_Localization_PT_BR } from "material-react-table/locales/pt-BR";
-import { useDeferredValue, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 type ListFilters = {
 	status: LeadStatus | "ALL";
@@ -40,6 +42,7 @@ type ListFilters = {
 
 export function LeadsListingPage() {
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const { openCreateLead } = useLeadDialogs();
 	const { data: users } = useGetUsersQuery();
 	const [filters, setFilters] = usePersistentState<ListFilters>("leadListFilters", {
@@ -66,6 +69,9 @@ export function LeadsListingPage() {
 		orderByColumn: sorting[0]?.id ?? "createdAt",
 		orderByAsc: sorting[0] ? !sorting[0].desc : false,
 	});
+
+	const isWon = filters.status === "WON";
+	const isLost = filters.status === "LOST";
 
 	const columns = useMemo<MRT_ColumnDef<Lead>[]>(
 		() => [
@@ -97,15 +103,20 @@ export function LeadsListingPage() {
 			},
 			{
 				id: "owner",
-				header: "Responsável",
+				header: isWon ? "Fechado por" : "Responsável",
 				enableSorting: false,
-				size: 180,
-				Cell: ({ row }) => (
-					<div className="flex items-center gap-2">
-						<UserAvatar user={row.original.owner} size={24} tooltip={false} />
-						<span className="truncate">{row.original.owner?.name ?? "Sem responsável"}</span>
-					</div>
-				),
+				size: 190,
+				Cell: ({ row }) => {
+					const person = isWon ? row.original.closedBy : row.original.owner;
+					return (
+						<div className="flex items-center gap-2">
+							<UserAvatar user={person} size={24} tooltip={false} />
+							<span className={`truncate ${isWon ? "font-semibold" : ""}`}>
+								{person?.name ?? (isWon ? "Não registrado" : "Sem responsável")}
+							</span>
+						</div>
+					);
+				},
 			},
 			{
 				accessorKey: "estimatedValue",
@@ -113,14 +124,51 @@ export function LeadsListingPage() {
 				size: 120,
 				Cell: ({ row }) => <span className="tabular-nums">{formatCurrency(row.original.estimatedValue)}</span>,
 			},
-			{
-				id: "next",
-				header: "Próximo passo",
-				enableSorting: false,
-				size: 170,
-				Cell: ({ row }) =>
-					row.original.status === "OPEN" ? <NextActivityLabel activity={row.original.nextActivity} /> : "N/A",
-			},
+			...(isWon
+				? [
+						{
+							accessorKey: "wonAt",
+							header: "Fechado em",
+							size: 130,
+							Cell: ({ row }) => formatShortDate(row.original.wonAt),
+						} satisfies MRT_ColumnDef<Lead>,
+						{
+							id: "plan",
+							header: "Plano",
+							enableSorting: false,
+							size: 140,
+							Cell: ({ row }) =>
+								row.original.plan
+									? `${row.original.plan}${row.original.billingCycle === "ANNUAL" ? " anual" : row.original.billingCycle ? " mensal" : ""}`
+									: "N/A",
+						} satisfies MRT_ColumnDef<Lead>,
+					]
+				: isLost
+					? [
+							{
+								id: "lostReason",
+								header: "Motivo",
+								enableSorting: false,
+								size: 170,
+								Cell: ({ row }) => row.original.lostReason ?? "N/A",
+							} satisfies MRT_ColumnDef<Lead>,
+							{
+								accessorKey: "lostAt",
+								header: "Perdido em",
+								size: 130,
+								Cell: ({ row }) => formatShortDate(row.original.lostAt),
+							} satisfies MRT_ColumnDef<Lead>,
+						]
+					: [
+							{
+								id: "next",
+								header: "Próximo passo",
+								enableSorting: false,
+								size: 170,
+								Cell: ({ row }) =>
+									row.original.status === "OPEN" ? <NextActivityLabel activity={row.original.nextActivity} /> : "N/A",
+							} satisfies MRT_ColumnDef<Lead>,
+						]),
 			{
 				id: "channel",
 				header: "Canal",
@@ -140,7 +188,7 @@ export function LeadsListingPage() {
 				Cell: ({ row }) => formatShortDate(row.original.createdAt),
 			},
 		],
-		[],
+		[isWon, isLost],
 	);
 
 	const table = useMaterialReactTable({
@@ -201,6 +249,22 @@ export function LeadsListingPage() {
 		setPagination((p) => ({ ...p, pageIndex: 0 }));
 	};
 
+	/** Ao trocar de aba, ordena pelo que importa nela: data de fechamento, de perda ou de criação. */
+	const changeStatus = (status: ListFilters["status"]) => {
+		update({ status });
+		setSorting([{ id: status === "WON" ? "wonAt" : status === "LOST" ? "lostAt" : "createdAt", desc: true }]);
+	};
+
+	// Link direto para uma aba (ex.: /leads?status=WON, vindo do Início)
+	useEffect(() => {
+		const status = searchParams.get("status") as ListFilters["status"] | null;
+		if (status && ["OPEN", "WON", "LOST", "ALL"].includes(status)) {
+			changeStatus(status);
+			searchParams.delete("status");
+			setSearchParams(searchParams, { replace: true });
+		}
+	});
+
 	return (
 		<PageSimple
 			header={
@@ -226,6 +290,12 @@ export function LeadsListingPage() {
 							</Button>
 						</PageActions>
 					</PageHeader>
+					<Tabs value={filters.status} onChange={(_, v) => changeStatus(v)} aria-label="Status dos leads">
+						<Tab value="OPEN" label="Em aberto" data-cy="tab-leads-open" />
+						<Tab value="WON" label="Ganhos" data-cy="tab-leads-won" />
+						<Tab value="LOST" label="Perdidos" data-cy="tab-leads-lost" />
+						<Tab value="ALL" label="Todos" data-cy="tab-leads-all" />
+					</Tabs>
 					<div className="flex flex-wrap gap-2 items-center">
 						<ToggleButtonGroup
 							exclusive
@@ -237,20 +307,6 @@ export function LeadsListingPage() {
 							<ToggleButton value="all">Todos</ToggleButton>
 							<ToggleButton value="mine">Meus leads</ToggleButton>
 						</ToggleButtonGroup>
-						<TextField
-							select
-							size="small"
-							label="Status"
-							value={filters.status}
-							onChange={(e) => update({ status: e.target.value as ListFilters["status"] })}
-							sx={{ width: 150 }}
-							fullWidth={false}
-						>
-							<MenuItem value="OPEN">Em aberto</MenuItem>
-							<MenuItem value="WON">Ganhos</MenuItem>
-							<MenuItem value="LOST">Perdidos</MenuItem>
-							<MenuItem value="ALL">Todos</MenuItem>
-						</TextField>
 						<TextField
 							select
 							size="small"

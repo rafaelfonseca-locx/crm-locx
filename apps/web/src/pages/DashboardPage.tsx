@@ -10,7 +10,7 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { useStageColor } from "@/hooks/useStageColor";
 import type { Dashboard } from "@/store/api/@types/dashboard.types";
 import { useGetDashboardQuery, useGetUsersQuery } from "@/store/api/hooks";
-import { formatCompactCurrency, formatCurrency, formatPercent } from "@/utils/formatters";
+import { formatCompactCurrency, formatCurrency, formatPercent, formatShortDate } from "@/utils/formatters";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import LinearProgress from "@mui/material/LinearProgress";
@@ -253,6 +253,89 @@ function ChannelsPanel({ data }: { data: Dashboard }) {
 	);
 }
 
+/** Cada venda do período, com quem fechou: o "quem vendeu o quê" do time. */
+function WonDealsPanel({ data }: { data: Dashboard }) {
+	const navigate = useNavigate();
+	const total = data.wonDeals.reduce((acc, d) => acc + (d.value ?? 0), 0);
+	return (
+		<Panel
+			title="Vendas fechadas"
+			subtitle={`${data.wonDeals.length} ${data.wonDeals.length === 1 ? "venda" : "vendas"} nos últimos ${data.period.days} dias · ${formatCurrency(total)}/mês`}
+			info="Quem fechou é o responsável pelo lead (ou quem marcou como Ganho, se não havia responsável)."
+			action={
+				<Typography
+					component={Link}
+					to="/leads?status=WON"
+					variant="caption"
+					fontWeight={600}
+					sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}
+				>
+					Ver todas
+				</Typography>
+			}
+		>
+			{data.wonDeals.length === 0 ? (
+				<EmptyState compact icon={<Trophy size={28} strokeWidth={1.5} />} title="Nenhuma venda no período" />
+			) : (
+				<div className="overflow-x-auto">
+					<table className="w-full text-[13px]">
+						<thead>
+							<tr className="text-left border-b">
+								{["Cliente", "Fechado por", "Plano", "Valor/mês", "Ciclo", "Data"].map((h, i) => (
+									<Typography
+										key={h}
+										component="th"
+										variant="caption"
+										color="text.secondary"
+										fontWeight={600}
+										className={`py-2 ${i >= 3 ? "text-right px-2" : "pr-3"}`}
+									>
+										{h}
+									</Typography>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							{data.wonDeals.map((deal) => (
+								<tr
+									key={deal.id}
+									className="border-b last:border-b-0 cursor-pointer hover:bg-[var(--mui-palette-action-hover)]"
+									onClick={() => navigate(`/leads/${deal.id}`)}
+									onKeyDown={(e) => e.key === "Enter" && navigate(`/leads/${deal.id}`)}
+									data-cy={`won-deal-${deal.id}`}
+								>
+									<td className="py-2.5 pr-3">
+										<div className="font-semibold truncate max-w-[260px]">{deal.companyName ?? deal.name}</div>
+										{deal.companyName && <div className="text-xs opacity-60 truncate max-w-[260px]">{deal.name}</div>}
+									</td>
+									<td className="pr-3">
+										<div className="flex items-center gap-2">
+											<UserAvatar user={deal.closedBy} size={26} tooltip={false} />
+											<span className="font-medium truncate">{deal.closedBy?.name ?? "Não registrado"}</span>
+										</div>
+									</td>
+									<td className="pr-3 whitespace-nowrap">
+										{deal.plan
+											? `${deal.plan}${deal.billingCycle === "ANNUAL" ? " anual" : deal.billingCycle ? " mensal" : ""}`
+											: "—"}
+									</td>
+									<td className="text-right px-2 tabular-nums font-semibold">
+										{deal.value !== null ? formatCurrency(deal.value) : "—"}
+									</td>
+									<td className="text-right px-2 tabular-nums">
+										{deal.cycleDays !== null ? `${deal.cycleDays} dias` : "—"}
+									</td>
+									<td className="text-right px-2 tabular-nums">{formatShortDate(deal.wonAt)}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+		</Panel>
+	);
+}
+
 function TeamPanel({ data }: { data: Dashboard }) {
 	return (
 		<Panel
@@ -458,7 +541,8 @@ export function DashboardPage() {
 							/>
 							<KpiTile
 								label="Vendas"
-								info="Leads marcados como Ganho no período."
+								info="Leads marcados como Ganho no período. Clique para ver a lista com quem fechou."
+								to="/leads?status=WON"
 								value={String(k.won)}
 								hint={`${k.lost} perdidos`}
 								icon={<Trophy size={16} strokeWidth={1.5} />}
@@ -489,6 +573,9 @@ export function DashboardPage() {
 							</div>
 							<div className="lg:col-span-5">
 								<PipelinePanel data={dashboard} />
+							</div>
+							<div className="lg:col-span-12">
+								<WonDealsPanel data={dashboard} />
 							</div>
 							<div className="lg:col-span-7">
 								<LeadsPerDayPanel data={dashboard} />

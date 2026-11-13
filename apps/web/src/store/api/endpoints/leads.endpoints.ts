@@ -1,5 +1,14 @@
 import type { ApiResponse } from "../@types/common.types";
-import type { Lead, LeadListParams, LeadPayload, LeadStage, ParticipantRole, StageEvent } from "../@types/lead.types";
+import type {
+	Lead,
+	LeadKind,
+	LeadListParams,
+	LeadPayload,
+	LeadStage,
+	ParticipantRole,
+	Partner,
+	StageEvent,
+} from "../@types/lead.types";
 import { apiService, cleanParams } from "../apiService";
 
 const leadChanged = (id: number) => [
@@ -32,6 +41,14 @@ export const leadsApi = apiService.injectEndpoints({
 			query: () => "/leads/sources",
 			providesTags: [{ type: "Lead", id: "LIST" }],
 		}),
+		getPartners: build.query<ApiResponse<Partner[]>, void>({
+			query: () => "/leads/partners",
+			providesTags: [{ type: "Lead", id: "LIST" }],
+		}),
+		setLeadKind: build.mutation<ApiResponse<Lead>, { id: number; kind: LeadKind }>({
+			query: ({ id, kind }) => ({ url: `/leads/${id}/kind`, method: "POST", body: { kind } }),
+			invalidatesTags: (_r, _e, { id }) => leadChanged(id),
+		}),
 		getLeadById: build.query<ApiResponse<Lead>, number>({
 			query: (id) => `/leads/${id}`,
 			providesTags: (_r, _e, id) => [{ type: "Lead", id }],
@@ -42,7 +59,14 @@ export const leadsApi = apiService.injectEndpoints({
 		}),
 		createLead: build.mutation<ApiResponse<Lead>, LeadPayload>({
 			query: (body) => ({ url: "/leads", method: "POST", body }),
-			invalidatesTags: [{ type: "Lead", id: "LIST" }, "Dashboard", "User", { type: "Activity", id: "AGENDA" }],
+			invalidatesTags: (_r, _e, body) => [
+				{ type: "Lead", id: "LIST" },
+				"Dashboard",
+				"User",
+				{ type: "Activity", id: "AGENDA" },
+				// Atualiza a lista de indicações do parceiro
+				...(body.referredById ? [{ type: "Lead" as const, id: body.referredById }] : []),
+			],
 		}),
 		updateLead: build.mutation<ApiResponse<Lead>, { id: number } & LeadPayload>({
 			query: ({ id, ...body }) => ({ url: `/leads/${id}`, method: "PATCH", body }),

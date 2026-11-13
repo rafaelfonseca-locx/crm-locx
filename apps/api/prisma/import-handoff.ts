@@ -162,6 +162,12 @@ function trialDates(text: string | null) {
 	return { start, end: get("fim") ?? new Date(start.getTime() + 7 * DAY) };
 }
 
+/** Parceiros vendem por nós (indicam clientes); não passam pelo funil. */
+export function isPartnerLead(lead: Pick<HandoffLead, "resumo" | "tempo">) {
+	const texts = [lead.resumo ?? "", ...(lead.tempo ?? []).map(([, text]) => text)];
+	return texts.some((text) => /(^|\s)(atuar[áa]|ser[áa]|vai ser|é) (como )?(um |nosso )?parceiro\b/i.test(text));
+}
+
 async function importLead(lead: HandoffLead, team: { id: string; name: string }[]) {
 	const externalRef = `handoff:${lead.id}`;
 	const emails = (lead.email ?? "")
@@ -172,9 +178,17 @@ async function importLead(lead: HandoffLead, team: { id: string; name: string }[
 
 	const duplicate = await prisma.lead.findFirst({
 		where: { OR: [{ externalRef }, ...(email ? [{ email }] : [])] },
-		select: { id: true },
+		select: { id: true, kind: true },
 	});
-	if (duplicate) return { status: "skipped" as const, leadId: duplicate.id };
+	if (duplicate) {
+		// Base já importada antes da separação de parceiros: só marca como parceiro
+		if (duplicate.kind === "PROSPECT" && isPartnerLead(lead)) {
+			await prisma.lead.update({ where: { id: duplicate.id }, data: { kind: "PARTNER" } });
+			await prisma.activity.create({ data: { leadId: duplicate.id, type: "SYSTEM", title: "Marcado como parceiro" } });
+			return { status: "partner" as const, leadId: duplicate.id };
+		}
+		return { status: "skipped" as const, leadId: duplicate.id };
+	}
 
 	const owner = lead.resp
 		? team.find((u) => u.name.toLowerCase().split(" ")[0] === lead.resp?.toLowerCase().trim())
@@ -211,6 +225,7 @@ async function importLead(lead: HandoffLead, team: { id: string; name: string }[
 				contractsRange: contractsBucket(lead.carteira),
 				stage,
 				status,
+				kind: isPartnerLead(lead) ? "PARTNER" : "PROSPECT",
 				temperature: lead.farol ? (TEMPERATURES[lead.farol.toUpperCase()] ?? null) : null,
 				plan: plan.plan,
 				billingCycle: plan.billingCycle,
@@ -380,12 +395,15 @@ async function main() {
 	const team = await prisma.user.findMany({ select: { id: true, name: true } });
 	let imported = 0;
 	let skipped = 0;
+	let partners = 0;
 	for (const lead of leads) {
 		const result = await importLead(lead, team);
 		if (result.status === "imported") imported++;
+		else if (result.status === "partner") partners++;
 		else skipped++;
 	}
 	console.info(`${imported} leads importados, ${skipped} pulados (já estavam no CRM).`);
+	if (partners) console.info(`${partners} lead(s) já existente(s) marcado(s) como parceiro.`);
 }
 
 if (process.argv[1]?.endsWith("import-handoff.ts")) {

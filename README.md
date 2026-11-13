@@ -55,7 +55,8 @@ Escolher plano e ciclo preenche o valor mensal sozinho (dá para ajustar em caso
 
 - **Início**: atividades atrasadas e do dia, trials terminando, KPIs (novos leads, reuniões, trials, vendas, MRR novo, taxa de ganho, ciclo médio), funil de conversão, pipeline atual, leads por dia, origens, desempenho por comercial e motivos de perda. Filtro por período e por comercial.
 - **Pipeline**: Kanban com arrastar e soltar. Ao arrastar aparecem as áreas **Ganho** e **Perdido**. Cards mostram valor, temperatura, próximo passo (atrasado em vermelho, "sem próximo passo" em laranja), dias na etapa, responsável e participantes, e o progresso do trial. Filtros: Todos/Meus leads, responsável, origem, temperatura e busca.
-- **Leads**: tabela paginada com filtros por status, etapa e responsável.
+- **Leads**: tabela paginada com abas Em aberto, Ganhos, Perdidos e Todos. Em **Ganhos** aparecem **Fechado por**, data e plano; em **Perdidos**, motivo e data.
+- **Parceiros**: quem vende por nós (não compra). Ficam fora do pipeline, do funil e das vendas; cada parceiro mostra as indicações, quantas viraram venda e a receita gerada.
 - **Detalhe do lead**: trilha de etapas clicável, registro rápido (nota, ligação, WhatsApp, e-mail, tarefa, reunião), próximos passos, linha do tempo, painel do trial (prazo, roteiro com checklist, estender, encerrar, converter), histórico de etapas com tempo em cada uma, equipe no processo, contato (com atalho para WhatsApp), empresa, oportunidade e origem (UTMs e conversão do RD).
 - **Trials**: cards com dia atual, dias restantes, progresso do roteiro e próxima ação.
 - **Agenda**: tarefas e reuniões atrasadas, de hoje e próximas, minhas ou da equipe.
@@ -150,7 +151,16 @@ npm run db:import -- "C:\caminho\para\Handoff_RE_Patrimonial.html"
 - Rodar a importação de novo não duplica: leads já importados ou com o mesmo e-mail são pulados.
 - Responsáveis que não estão no time entram **sem responsável** (o nome original fica no histórico); Douglas e Isabela mantêm os deles.
 - Pausados entram como **perdidos, motivo "Pausado"** (dá para reabrir).
+- Quem a planilha descreve como parceiro (ex.: "atuará como um parceiro", caso da Gow Capital) entra como **parceiro**. Rodar a importação de novo numa base já importada marca esses leads como parceiros.
 - **O arquivo tem dados pessoais: não coloque no repositório.**
+
+## Parceiros
+
+Parceiro é quem vende o RE Patrimonial por nós e indica clientes. Não é venda: fica fora do pipeline, do funil, dos números do Início e não é enviado ao funil do RD.
+
+- Para cadastrar: abra o lead e use **⋯ › Marcar como parceiro** (para desfazer, **Voltar para o funil**).
+- Na página do parceiro, **Nova indicação** cadastra um cliente já com **Indicado por** preenchido e origem "Parceiro".
+- Em qualquer lead dá para escolher o parceiro em **Editar › Indicado por**. O card no pipeline mostra "via Parceiro".
 
 ## Notificações
 

@@ -4,7 +4,7 @@ import { Dialog, DialogActions, DialogContent, DialogTitle } from "@/components/
 import { useAuth } from "@/hooks/useAuth";
 import { useNotify } from "@/hooks/useNotify";
 import type { Lead, LeadStage } from "@/store/api/@types/lead.types";
-import { useCreateLeadMutation, useGetUsersQuery, useUpdateLeadMutation } from "@/store/api/hooks";
+import { useCreateLeadMutation, useGetPartnersQuery, useGetUsersQuery, useUpdateLeadMutation } from "@/store/api/hooks";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
@@ -58,6 +58,8 @@ export const leadValidationSchema = z.object({
 	channel: z.enum(["DEMO", "WHATSAPP", "SITE", "MANUAL"]),
 	source: z.string().min(1, "Origem é obrigatória"),
 	ownerId: z.string().nullish(),
+	// Id do parceiro (texto no formulário, número na API)
+	referredById: z.string().nullish(),
 	stage: z.enum(["NEW", "QUALIFICATION", "MEETING", "TRIAL", "CLOSING"]),
 	notes: optional,
 });
@@ -70,8 +72,15 @@ function toPayload(values: LeadValidationSchema) {
 		key,
 		typeof value === "string" && value.trim() === "" ? null : value,
 	]);
-	return { ...(Object.fromEntries(entries) as LeadValidationSchema), source: values.source };
+	const payload = Object.fromEntries(entries) as LeadValidationSchema;
+	return {
+		...payload,
+		source: values.source,
+		referredById: payload.referredById ? Number(payload.referredById) : null,
+	};
 }
+
+const isFromIntegrationSource = (source: string | null | undefined) => source === "RD Station" || source === "Cal.com";
 
 const options = (values: readonly string[], current?: string | null) =>
 	[...new Set([...values, ...(current ? [current] : [])])].map((v) => ({ label: v, value: v }));
@@ -80,15 +89,25 @@ type LeadFormDialogProps = {
 	open: boolean;
 	lead?: Lead | null;
 	defaultStage?: LeadStage;
+	defaultReferredById?: number;
 	onClose: () => void;
 	onSaved?: (lead: Lead) => void;
 };
 
-export function LeadFormDialog({ open, lead, defaultStage, onClose, onSaved }: LeadFormDialogProps) {
+export function LeadFormDialog({
+	open,
+	lead,
+	defaultStage,
+	defaultReferredById,
+	onClose,
+	onSaved,
+}: LeadFormDialogProps) {
 	const isEditing = !!lead;
 	const { user } = useAuth();
 	const notify = useNotify();
 	const { data: users } = useGetUsersQuery();
+	const { data: partners } = useGetPartnersQuery(undefined, { skip: !open });
+	const isPartner = lead?.kind === "PARTNER";
 	const [createLead, { isLoading: isCreating }] = useCreateLeadMutation();
 	const [updateLead, { isLoading: isUpdating }] = useUpdateLeadMutation();
 	const isSaving = isCreating || isUpdating;
@@ -113,12 +132,17 @@ export function LeadFormDialog({ open, lead, defaultStage, onClose, onSaved }: L
 			plan: lead?.plan ?? null,
 			billingCycle: lead?.billingCycle ?? "MONTHLY",
 			channel: lead?.channel ?? "MANUAL",
-			source: lead?.source ?? "Manual",
+			source: lead?.source ?? (defaultReferredById ? "Parceiro" : "Manual"),
+			referredById: lead?.referredById
+				? String(lead.referredById)
+				: defaultReferredById
+					? String(defaultReferredById)
+					: null,
 			ownerId: lead ? lead.ownerId : (user?.id ?? null),
 			stage: lead?.stage ?? defaultStage ?? "NEW",
 			notes: lead?.notes ?? null,
 		}),
-		[lead, user?.id, defaultStage],
+		[lead, user?.id, defaultStage, defaultReferredById],
 	);
 
 	const {
@@ -142,6 +166,15 @@ export function LeadFormDialog({ open, lead, defaultStage, onClose, onSaved }: L
 	}, [plan, billingCycle, setValue, getValues]);
 
 	const userOptions = (users?.data ?? []).map((u) => ({ label: u.name, value: u.id }));
+	const partnerOptions = (partners?.data ?? [])
+		.filter((p) => p.id !== lead?.id)
+		.map((p) => ({ label: p.companyName ? `${p.companyName} · ${p.name}` : p.name, value: String(p.id) }));
+
+	// Indicação de parceiro: a origem passa a ser "Parceiro"
+	const referredById = useWatch({ control, name: "referredById" });
+	useEffect(() => {
+		if (referredById && !isFromIntegrationSource(getValues("source"))) setValue("source", "Parceiro");
+	}, [referredById, setValue, getValues]);
 	const isFromIntegration = lead?.source === "RD Station" || lead?.source === "Cal.com";
 
 	const handleSave = async (values: LeadValidationSchema) => {
@@ -351,6 +384,22 @@ export function LeadFormDialog({ open, lead, defaultStage, onClose, onSaved }: L
 							options={options(LEAD_SOURCES, lead?.source)}
 							disabled={isSaving || isFromIntegration}
 						/>
+						{!isPartner && (
+							<RHFSelect
+								className="col-span-12"
+								control={control}
+								name="referredById"
+								label="Indicado por (parceiro)"
+								emptyLabel="Ninguém (não veio de parceiro)"
+								options={partnerOptions}
+								disabled={isSaving}
+								helperText={
+									partnerOptions.length === 0
+										? "Nenhum parceiro cadastrado. Marque um lead como parceiro no menu do lead."
+										: "Parceiros vendem por nós: a venda conta para o parceiro que indicou."
+								}
+							/>
+						)}
 						<RHFTextField
 							className="col-span-12"
 							control={control}

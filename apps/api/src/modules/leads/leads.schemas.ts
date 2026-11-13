@@ -3,6 +3,7 @@ import { z } from "zod";
 export const STAGES = ["NEW", "QUALIFICATION", "MEETING", "TRIAL", "CLOSING"] as const;
 export const STATUSES = ["OPEN", "WON", "LOST"] as const;
 export const TEMPERATURES = ["COLD", "WARM", "HOT"] as const;
+export const KINDS = ["PROSPECT", "PARTNER"] as const;
 export const CHANNELS = ["DEMO", "WHATSAPP", "SITE", "MANUAL"] as const;
 export const PARTICIPANT_ROLES = ["SDR", "CLOSER", "ONBOARDING", "TECHNICAL", "OBSERVER"] as const;
 
@@ -49,6 +50,8 @@ export const leadBodySchema = z.object({
 	utmCampaign: optionalText(120),
 	ownerId: z.string().nullish(),
 	stage: z.enum(STAGES).optional(),
+	// Parceiro que indicou o lead
+	referredById: z.coerce.number().int().positive().nullish(),
 });
 
 export const leadUpdateSchema = leadBodySchema.partial();
@@ -57,6 +60,9 @@ export const leadListQuerySchema = z.object({
 	search: z.string().trim().optional(),
 	stage: z.enum(STAGES).optional(),
 	status: z.enum([...STATUSES, "ALL"]).default("OPEN"),
+	// Por padrão só clientes em potencial; parceiros ficam na página própria
+	kind: z.enum([...KINDS, "ALL"]).default("PROSPECT"),
+	referredById: z.coerce.number().int().positive().optional(),
 	ownerId: z.string().optional(),
 	mine: z.enum(["true", "false"]).optional(),
 	source: z.string().optional(),
@@ -65,7 +71,7 @@ export const leadListQuerySchema = z.object({
 	skip: z.coerce.number().int().min(0).default(0),
 	take: z.coerce.number().int().min(1).max(1000).default(50),
 	orderByColumn: z
-		.enum(["createdAt", "name", "companyName", "estimatedValue", "stageChangedAt", "id"])
+		.enum(["createdAt", "name", "companyName", "estimatedValue", "stageChangedAt", "id", "wonAt", "lostAt"])
 		.default("createdAt"),
 	orderByAsc: z.enum(["true", "false"]).default("false"),
 });
@@ -88,5 +94,7 @@ export const participantSchema = z.object({
 	userId: z.string({ required_error: "Pessoa é obrigatória" }).min(1, "Pessoa é obrigatória"),
 	role: z.enum(PARTICIPANT_ROLES).default("OBSERVER"),
 });
+
+export const kindSchema = z.object({ kind: z.enum(KINDS) });
 
 export const transferSchema = z.object({ ownerId: z.string().min(1, "Responsável é obrigatório") });

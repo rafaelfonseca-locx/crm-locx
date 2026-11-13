@@ -27,7 +27,8 @@ dashboardRouter.get("/", async (req, res) => {
 	const now = new Date();
 	const since = new Date(now.getTime() - days * DAY);
 	const prevSince = new Date(since.getTime() - days * DAY);
-	const ownerFilter: Prisma.LeadWhereInput = ownerId ? { ownerId } : {};
+	// Parceiros ficam fora do funil e das vendas
+	const ownerFilter: Prisma.LeadWhereInput = ownerId ? { ownerId, kind: "PROSPECT" } : { kind: "PROSPECT" };
 
 	const [
 		createdLeads,
@@ -56,7 +57,25 @@ dashboardRouter.get("/", async (req, res) => {
 		prisma.lead.count({ where: { ...ownerFilter, createdAt: { gte: prevSince, lt: since } } }),
 		prisma.lead.findMany({
 			where: { ...ownerFilter, status: "WON", wonAt: { gte: since } },
-			select: { id: true, ownerId: true, estimatedValue: true, createdAt: true, wonAt: true },
+			select: {
+				id: true,
+				name: true,
+				companyName: true,
+				plan: true,
+				billingCycle: true,
+				ownerId: true,
+				estimatedValue: true,
+				createdAt: true,
+				wonAt: true,
+				owner: { select: userSummarySelect },
+				stageEvents: {
+					where: { toStatus: "WON" },
+					orderBy: { createdAt: "desc" },
+					take: 1,
+					select: { user: { select: userSummarySelect } },
+				},
+			},
+			orderBy: { wonAt: "desc" },
 		}),
 		prisma.lead.findMany({
 			where: { ...ownerFilter, status: "LOST", lostAt: { gte: since } },
@@ -178,6 +197,17 @@ dashboardRouter.get("/", async (req, res) => {
 			openLeads: openLeads.length,
 			pipelineValue: sumValue(openLeads),
 		},
+		wonDeals: wonLeads.map((l) => ({
+			id: l.id,
+			name: l.name,
+			companyName: l.companyName,
+			plan: l.plan,
+			billingCycle: l.billingCycle,
+			value: l.estimatedValue === null ? null : Number(l.estimatedValue),
+			wonAt: l.wonAt,
+			closedBy: l.owner ?? l.stageEvents[0]?.user ?? null,
+			cycleDays: l.wonAt ? Math.max(0, Math.round((l.wonAt.getTime() - l.createdAt.getTime()) / DAY)) : null,
+		})),
 		funnel: [...funnel, { stage: "WON", count: wonFromCohort }],
 		pipeline,
 		sources: [...sources.values()].sort((a, b) => b.count - a.count),

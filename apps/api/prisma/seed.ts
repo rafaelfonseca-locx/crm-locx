@@ -16,7 +16,7 @@ const STAGES: LeadStage[] = ["NEW", "QUALIFICATION", "MEETING", "TRIAL", "CLOSIN
 const TEAM: { name: string; email: string; role: Role; photo: string; color: string; receivesLeads: boolean }[] = [
 	{
 		name: "Douglas Andrade",
-		email: "douglas.andrade@locximoveis.com.br",
+		email: "douglas.andrade@locx.com.br",
 		role: "MANAGER",
 		photo: "douglas",
 		color: "#455A64",
@@ -24,7 +24,7 @@ const TEAM: { name: string; email: string; role: Role; photo: string; color: str
 	},
 	{
 		name: "Rafael Fonseca",
-		email: "rafael.fonseca@locximoveis.com.br",
+		email: "rafael.fonseca@locx.com.br",
 		role: "MANAGER",
 		photo: "rafael",
 		color: "#0288D1",
@@ -48,7 +48,7 @@ const TEAM: { name: string; email: string; role: Role; photo: string; color: str
 	},
 	{
 		name: "Guilherme Rodrigues",
-		email: "guilherme.rodrigues@locximoveis.com.br",
+		email: "guilherme.rodrigues@locx.com.br",
 		role: "SALES",
 		photo: "guilherme",
 		color: "#7B1FA2",
@@ -184,24 +184,33 @@ const COMPANIES = [
 	"Oeste Imóveis",
 ];
 const STATES = ["SP", "SP", "MG", "PR", "RS", "SC", "RJ", "GO", "PE", "BA"];
-const BUSINESS_TYPES = ["Imobiliária", "Administradora de imóveis", "Proprietário ou investidor", "Corretor autônomo"];
-const ROLES = ["Sócio ou diretor", "Gerente", "Corretor", "Administrativo ou financeiro"];
-const CONTRACTS = ["Até 50", "51 a 200", "201 a 500", "501 a 1.000", "Mais de 1.000"];
-const TOOLS = ["Planilhas", "Outro sistema", "Papel ou manual"];
+const BUSINESS_TYPES = [
+	"Holding patrimonial familiar",
+	"Pessoa física com imóveis próprios",
+	"Family office",
+	"Empresa com imóveis para renda",
+	"Administradora/consultoria patrimonial",
+];
+const ROLES = ["Sócio ou diretor", "Gestor do patrimônio", "Financeiro ou administrativo", "Consultor ou assessor"];
+const CONTRACTS = ["1 a 5", "6 a 25", "26 a 50", "51 a 100", "Mais de 100"];
+const TOOLS = ["Não, uso planilha", "Sim, outro sistema", "Não gerencio ainda"];
 const TIMELINES = ["Imediatamente", "Em até 30 dias", "Em até 3 meses", "Só estou pesquisando"];
 const CHANNEL_CONFIG: Record<
 	Exclude<LeadChannel, "MANUAL">,
 	{ identifier: string; utm: { utmSource: string; utmMedium: string; utmCampaign: string | null } }
 > = {
 	DEMO: {
-		identifier: "agendar-demonstracao",
+		identifier: "agendou_demonstracao",
 		utm: { utmSource: "google", utmMedium: "cpc", utmCampaign: "gestao-locacao" },
 	},
 	WHATSAPP: {
-		identifier: "formulario-whatsapp",
+		identifier: "botao-wpp-holding",
 		utm: { utmSource: "facebook", utmMedium: "paid-social", utmCampaign: "imobiliarias-2026" },
 	},
-	SITE: { identifier: "formulario-site", utm: { utmSource: "organic", utmMedium: "blog", utmCampaign: null } },
+	SITE: {
+		identifier: "formulario-lp-re_patrimonial",
+		utm: { utmSource: "organic", utmMedium: "blog", utmCampaign: null },
+	},
 };
 const LOST_REASONS = ["Preço", "Escolheu concorrente", "Sem resposta", "Sem fit com o produto", "Momento inadequado"];
 const NOTES = [
@@ -222,6 +231,11 @@ async function upsertTeam() {
 	const passwordHash = await bcrypt.hash(INITIAL_PASSWORD, 10);
 	const users = [];
 	for (const member of TEAM) {
+		// E-mails antigos (@locximoveis.com.br) passam para o domínio atual, mantendo senha e histórico
+		const oldEmail = member.email.replace("@locx.com.br", "@locximoveis.com.br");
+		const old = await prisma.user.findUnique({ where: { email: oldEmail }, select: { id: true } });
+		const current = await prisma.user.findUnique({ where: { email: member.email }, select: { id: true } });
+		if (old && !current) await prisma.user.update({ where: { id: old.id }, data: { email: member.email } });
 		const data = {
 			name: member.name,
 			role: member.role,

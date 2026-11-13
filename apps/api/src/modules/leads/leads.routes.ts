@@ -3,6 +3,7 @@ import { Router } from "express";
 import { HttpError, notFound, ok, parse } from "../../lib/http.js";
 import { prisma } from "../../lib/prisma.js";
 import { isManager } from "../../middlewares/auth.js";
+import { notifySafely } from "../notifications/notifications.service.js";
 import { leadDetailInclude, leadListInclude, serializeLead, userSummarySelect } from "./leads.include.js";
 import {
 	leadBodySchema,
@@ -100,6 +101,13 @@ leadsRouter.post("/", async (req, res) => {
 		});
 		return created;
 	});
+	notifySafely([lead.ownerId], {
+		type: "LEAD_ASSIGNED",
+		title: `Novo lead para você: ${lead.companyName ?? lead.name}`,
+		body: `${req.user.name} cadastrou o lead e deixou com você.`,
+		leadId: lead.id,
+		actorId: req.user.id,
+	});
 	return ok(res, await loadLead(lead.id), undefined, 201);
 });
 
@@ -178,7 +186,15 @@ leadsRouter.post("/:id/transfer", async (req, res) => {
 			data: { leadId: id, type: "SYSTEM", title: `Responsável alterado para ${newOwner.name}`, authorId: req.user.id },
 		}),
 	]);
-	return ok(res, await loadLead(id));
+	const transferred = await loadLead(id);
+	notifySafely([ownerId], {
+		type: "LEAD_ASSIGNED",
+		title: `Lead transferido para você: ${transferred.companyName ?? transferred.name}`,
+		body: `${req.user.name} passou este lead para você.`,
+		leadId: id,
+		actorId: req.user.id,
+	});
+	return ok(res, transferred);
 });
 
 leadsRouter.post("/:id/participants", async (req, res) => {
@@ -206,7 +222,15 @@ leadsRouter.post("/:id/participants", async (req, res) => {
 			},
 		}),
 	]);
-	return ok(res, await loadLead(id), undefined, 201);
+	const updated = await loadLead(id);
+	notifySafely([userId], {
+		type: "PARTICIPANT_ADDED",
+		title: `Você entrou no processo de ${updated.companyName ?? updated.name}`,
+		body: `${req.user.name} adicionou você como ${PARTICIPANT_ROLE_LABELS[role]}.`,
+		leadId: id,
+		actorId: req.user.id,
+	});
+	return ok(res, updated, undefined, 201);
 });
 
 leadsRouter.delete("/:id/participants/:userId", async (req, res) => {

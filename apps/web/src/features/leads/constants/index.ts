@@ -77,23 +77,30 @@ export function planPrice(plan: string | null | undefined, cycle: BillingCycle |
 /** Perguntas padronizadas dos formulários (as mesmas opções valem para RD, Cal.com e cadastro manual). */
 export const QUALIFICATION_OPTIONS = {
 	businessType: [
-		"Imobiliária",
-		"Administradora de imóveis",
-		"Proprietário ou investidor",
-		"Corretor autônomo",
+		"Pessoa física com imóveis próprios",
+		"Holding patrimonial familiar",
+		"Family office",
+		"Empresa com imóveis para renda",
+		"Administradora/consultoria patrimonial",
 		"Outro",
 	],
-	managementRole: ["Sócio ou diretor", "Gerente", "Corretor", "Administrativo ou financeiro", "Outro"],
-	contractsRange: ["Até 50", "51 a 200", "201 a 500", "501 a 1.000", "Mais de 1.000"],
-	currentTool: ["Planilhas", "Outro sistema", "Papel ou manual", "Ainda não administro"],
+	managementRole: [
+		"Sócio ou diretor",
+		"Gestor do patrimônio",
+		"Financeiro ou administrativo",
+		"Consultor ou assessor",
+		"Outro",
+	],
+	contractsRange: ["1 a 5", "6 a 25", "26 a 50", "51 a 100", "Mais de 100"],
+	currentTool: ["Não, uso planilha", "Sim, outro sistema", "Não gerencio ainda"],
 	startTimeline: ["Imediatamente", "Em até 30 dias", "Em até 3 meses", "Só estou pesquisando"],
 } as const;
 
 export const QUALIFICATION_LABELS = {
 	businessType: "Perfil do negócio",
 	managementRole: "Papel na gestão",
-	contractsRange: "Contratos administrados",
-	currentTool: "Como gerencia hoje",
+	contractsRange: "Imóveis/contratos administrados",
+	currentTool: "Já usa sistema de gestão?",
 	startTimeline: "Quando pretende começar",
 } as const;
 

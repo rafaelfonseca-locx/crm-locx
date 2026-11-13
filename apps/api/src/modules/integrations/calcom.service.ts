@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { parseMeetCode } from "../google/google.service.js";
 import { moveStage } from "../leads/leads.service.js";
+import { notifySafely } from "../notifications/notifications.service.js";
 import { upsertInboundLead } from "./inbound.service.js";
 import { extractQualification } from "./qualification.js";
 import { toUf } from "./rdstation.mapper.js";
@@ -117,6 +119,14 @@ export async function handleCalWebhook(body: unknown): Promise<CalResult> {
 				},
 			}),
 		]);
+		notifySafely([meeting.assigneeId ?? meeting.lead.ownerId], {
+			type: "CALENDAR",
+			title: `Demonstração cancelada: ${booking.name}`,
+			body: booking.cancellationReason
+				? `Motivo: ${booking.cancellationReason}`
+				: "O lead cancelou pelo Cal.com. Criamos a tarefa de reagendar.",
+			leadId: meeting.leadId,
+		});
 		return { status: "UPDATED", leadId: meeting.leadId, message: "Reunião cancelada" };
 	}
 
@@ -137,6 +147,7 @@ export async function handleCalWebhook(body: unknown): Promise<CalResult> {
 					data: {
 						dueAt: new Date(startTime),
 						meetingUrl: booking.meetingUrl ?? meeting.meetingUrl,
+						meetingCode: parseMeetCode(booking.meetingUrl) ?? meeting.meetingCode,
 						externalId: booking.uid ?? meeting.externalId,
 					},
 				}),
@@ -148,6 +159,12 @@ export async function handleCalWebhook(body: unknown): Promise<CalResult> {
 					},
 				}),
 			]);
+			notifySafely([meeting.assigneeId], {
+				type: "CALENDAR",
+				title: `Demonstração remarcada: ${booking.name}`,
+				body: `Nova data: ${formatDate(startTime)}.`,
+				leadId: meeting.leadId,
+			});
 			return { status: "UPDATED", leadId: meeting.leadId, message: `Reunião remarcada para ${formatDate(startTime)}` };
 		}
 		// Sem a reunião original no CRM: trata como um agendamento novo
@@ -189,16 +206,30 @@ export async function handleCalWebhook(body: unknown): Promise<CalResult> {
 			dueAt: new Date(startTime),
 			meetingUrl: booking.meetingUrl,
 			externalId: booking.uid ?? `cal-${lead.id}-${startTime}`,
+			meetingCode: parseMeetCode(booking.meetingUrl),
+			durationMin: booking.endTime
+				? Math.round((new Date(booking.endTime).getTime() - new Date(startTime).getTime()) / 60000)
+				: 45,
 			assigneeId,
 			metadata: { source: "cal.com", endTime: booking.endTime },
 		},
-		update: { dueAt: new Date(startTime), meetingUrl: booking.meetingUrl },
+		update: {
+			dueAt: new Date(startTime),
+			meetingUrl: booking.meetingUrl,
+			meetingCode: parseMeetCode(booking.meetingUrl),
+		},
 	});
 	// Lead sem dono recebe quem vai conduzir a reunião
 	if (!lead.ownerId && assigneeId) await prisma.lead.update({ where: { id: lead.id }, data: { ownerId: assigneeId } });
 	if (lead.status === "OPEN" && (lead.stage === "NEW" || lead.stage === "QUALIFICATION")) {
 		await moveStage(lead.id, "MEETING", assigneeId ?? null);
 	}
+	notifySafely([assigneeId], {
+		type: "CALENDAR",
+		title: `Demonstração agendada: ${lead.companyName ?? lead.name}`,
+		body: `${formatDate(startTime)}${booking.meetingUrl ? ` · ${booking.meetingUrl}` : ""}`,
+		leadId: lead.id,
+	});
 	return {
 		status: result.created ? "PROCESSED" : "UPDATED",
 		leadId: lead.id,
@@ -241,10 +272,10 @@ export function buildSampleCalPayload(organizerEmail: string | null) {
 				email: { label: "E-mail corporativo", value: `cal.teste.${id}@exemplo.com.br` },
 				whatsapp: { label: "WhatsApp", value: "(11) 98888-0000" },
 				estado: { label: "Estado", value: "MG" },
-				perfil: { label: "Qualificação do negócio", value: "Administradora" },
-				papel: { label: "Qual seu papel na gestão dos imóveis?", value: "Gerente" },
-				contratos: { label: "Quantos contratos de aluguel você gerencia hoje?", value: "501 a 1.000" },
-				gestao: { label: "Como você gerencia hoje?", value: "Planilhas" },
+				perfil: { label: "Qualificação do negócio", value: "Family office" },
+				papel: { label: "Qual seu papel na gestão dos imóveis?", value: "Gestor do patrimônio" },
+				contratos: { label: "Quantos contratos de aluguel você gerencia hoje?", value: "51 a 100" },
+				gestao: { label: "Como você gerencia hoje?", value: "Não, uso planilha" },
 				inicio: { label: "Quando você pretende começar a usar um sistema?", value: "Imediatamente" },
 			},
 		},

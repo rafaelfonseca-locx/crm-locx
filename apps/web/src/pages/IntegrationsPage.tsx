@@ -2,6 +2,8 @@ import { LoadingContent } from "@/components/feedback/LoadingContent";
 import { PageHeader, PageSimple, PageTitle } from "@/components/layout/Page";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InfoTip } from "@/components/ui/InfoTip";
+import { LeadConversionsEditor } from "@/features/integrations/LeadConversionsEditor";
+import { RdApiConnection } from "@/features/integrations/RdApiConnection";
 import { CHANNEL_ICONS } from "@/features/leads/components/ChannelIcon";
 import { CHANNEL_META, QUALIFICATION_OPTIONS } from "@/features/leads/constants";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,13 +30,14 @@ import RadioGroup from "@mui/material/RadioGroup";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import { CircleCheck, CircleX, Copy, Plug, RefreshCw, Send } from "lucide-react";
+import { CircleCheck, CircleX, Copy, MinusCircle, Plug, RefreshCw, Send } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 const LOG_STATUS = {
 	PROCESSED: { label: "Lead criado", color: "success" as const, icon: CircleCheck },
 	UPDATED: { label: "Lead atualizado", color: "info" as const, icon: RefreshCw },
+	IGNORED: { label: "Ignorado", color: "text" as const, icon: MinusCircle },
 	ERROR: { label: "Erro", color: "error" as const, icon: CircleX },
 };
 
@@ -58,19 +61,19 @@ const CHANNELS: { channel: Exclude<LeadChannel, "MANUAL">; flow: string; questio
 		channel: "DEMO",
 		flow: "Entra em Reunião, com data, horário e link do Cal.com. O vendedor da agenda vira o responsável.",
 		questions: FULL_QUESTIONS,
-		identifier: "agendar-demonstracao",
+		identifier: "agendou_demonstracao",
 	},
 	{
 		channel: "WHATSAPP",
 		flow: "Entra em Novo lead com a tarefa “Fazer o pré-atendimento pelo WhatsApp” em até 1 hora.",
 		questions: BASIC_QUESTIONS,
-		identifier: "formulario-whatsapp",
+		identifier: "botao-wpp-holding",
 	},
 	{
 		channel: "SITE",
 		flow: "Entra em Novo lead com a tarefa “Fazer o primeiro contato” em até 1 hora.",
 		questions: BASIC_QUESTIONS,
-		identifier: "formulario-site",
+		identifier: "formulario-lp-re_patrimonial",
 	},
 ];
 
@@ -213,7 +216,7 @@ export function IntegrationsPage() {
 								<Typography variant="subtitle1" className="font-bold">
 									Canais de entrada
 								</Typography>
-								<InfoTip title="O canal é identificado pelo identificador da conversão no RD (contém “agend” ou “demo” = demonstração; “whats” ou “wpp” = WhatsApp; o resto = site)." />
+								<InfoTip title="O canal é identificado pelo identificador da conversão no RD (contém “agend” ou “demo” = demonstração; “whats” ou “wpp” = WhatsApp; formulários da lista abaixo = site). Conversões de conteúdo não criam lead." />
 							</div>
 							<div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
 								{CHANNELS.map(({ channel, flow, questions, identifier }) => {
@@ -315,6 +318,8 @@ export function IntegrationsPage() {
 								) : (
 									<Alert severity="info">Somente gestores veem a URL do webhook.</Alert>
 								)}
+								<LeadConversionsEditor identifiers={rd.leadConversions} canEdit={isManager} />
+								<RdApiConnection status={rd.rdApi} canEdit={isManager} />
 							</IntegrationCard>
 
 							<IntegrationCard
@@ -445,7 +450,10 @@ export function IntegrationsPage() {
 											const Icon = meta.icon;
 											return (
 												<li key={log.id} className="flex items-start gap-3 py-2.5">
-													<Box sx={{ color: `${meta.color}.main` }} className="pt-0.5">
+													<Box
+														sx={{ color: meta.color === "text" ? "text.disabled" : `${meta.color}.main` }}
+														className="pt-0.5"
+													>
 														<Icon size={16} strokeWidth={1.75} />
 													</Box>
 													<div className="flex-1 min-w-0">
@@ -455,7 +463,9 @@ export function IntegrationsPage() {
 															</Typography>
 															<Chip
 																size="small"
-																label={log.source === "cal.com" ? "Cal.com" : "RD"}
+																label={
+																	log.source === "cal.com" ? "Cal.com" : log.source === "rd-sync" ? "CRM → RD" : "RD"
+																}
 																sx={{ height: 18, fontSize: 10, fontWeight: 700 }}
 															/>
 														</div>

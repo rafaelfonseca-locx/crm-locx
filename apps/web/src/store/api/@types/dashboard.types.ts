@@ -54,15 +54,17 @@ export type RdIntegration = {
 	webhookUrl: string | null;
 	calWebhookUrl: string | null;
 	assignmentMode: "ROUND_ROBIN" | "UNASSIGNED";
+	leadConversions: string[];
+	rdApi: { configured: boolean; connected: boolean; connectedAt: string | null };
 	received30d: number;
 	calBookings30d: number;
 	lastReceivedAt: string | null;
 	calLastReceivedAt: string | null;
 	logs: {
 		id: string;
-		source: "rd-station" | "cal.com";
+		source: "rd-station" | "cal.com" | "rd-sync";
 		conversion: string | null;
-		status: "PROCESSED" | "UPDATED" | "ERROR";
+		status: "PROCESSED" | "UPDATED" | "IGNORED" | "ERROR";
 		message: string | null;
 		leadId: number | null;
 		email: string | null;

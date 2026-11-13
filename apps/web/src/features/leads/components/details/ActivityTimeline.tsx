@@ -17,6 +17,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Trash2, Video } from "lucide-react";
 import { ACTIVITY_LABELS } from "../../constants";
+import { MeetingInsights } from "./MeetingInsights";
 import { ACTIVITY_ICONS } from "./activityIcons";
 
 function dayLabel(date: Date) {
@@ -191,6 +192,7 @@ function TimelineItem({
 						<Video size={13} strokeWidth={1.5} /> Link da reunião
 					</Link>
 				)}
+				{activity.type === "MEETING" && <MeetingInsights activity={activity} />}
 			</div>
 			{!isAutomatic && (
 				<div className="flex items-start gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">

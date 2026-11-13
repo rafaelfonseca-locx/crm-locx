@@ -85,6 +85,10 @@ model User {
   // Primeiro acesso: obriga a trocar a senha inicial
   mustChangePassword Boolean   @default(false)
   onboardedAt    DateTime?
+  // Preferências de e-mail
+  emailOnAssigned  Boolean @default(true)
+  emailOnCalendar  Boolean @default(true)
+  emailDailyDigest Boolean @default(true)
   active         Boolean   @default(true)
   // Participa do rodízio de distribuição de leads vindos do RD Station
   receivesLeads  Boolean   @default(true)
@@ -98,6 +102,8 @@ model User {
   assignedTasks  Activity[]           @relation("ActivityAssignee")
   stageEvents    StageEvent[]
   checklistDone  TrialChecklistItem[]
+  notifications  Notification[]
+  googleAccount  GoogleAccount?
 }
 
 model Lead {
@@ -138,6 +144,8 @@ model Lead {
   conversionIdentifier String?
   conversionCount      Int     @default(1)
   rdLeadId             String? @unique
+  // Referência de origem em importações (ex.: "handoff:12"), para não importar duas vezes
+  externalRef          String? @unique
   rdPublicUrl          String?
 
   lostReason     String?
@@ -187,6 +195,13 @@ model Activity {
   meetingUrl  String?
   // Id do agendamento no Cal.com, para remarcar e cancelar
   externalId  String?      @unique
+  // Reunião no Google Agenda/Meet e transcrição
+  durationMin         Int?
+  googleEventId       String?
+  meetingCode         String?
+  transcript          String?   @db.Text
+  aiSummary           String?   @db.Text
+  transcriptCheckedAt DateTime?
   metadata    Json?
   authorId    String?
   author      User?        @relation("ActivityAuthor", fields: [authorId], references: [id], onDelete: SetNull)
@@ -262,4 +277,36 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // LEAD_ASSIGNED | PARTICIPANT_ADDED | MEETING_SOON | TASK_OVERDUE | TRIAL_ENDING | CALENDAR | TRANSCRIPT
+  title     String
+  body      String?
+  leadId    Int?
+  link      String?
+  // Evita duplicar o mesmo aviso (ex.: "meeting-soon:<id da atividade>")
+  dedupeKey String?   @unique
+  readAt    DateTime?
+  emailedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+model GoogleAccount {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email        String
+  // Tokens criptografados (AES-256-GCM)
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  expiresAt    DateTime
+  scope        String   @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

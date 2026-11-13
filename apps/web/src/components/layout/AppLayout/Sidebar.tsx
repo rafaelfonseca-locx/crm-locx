@@ -1,6 +1,8 @@
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useLeadDialogs } from "@/features/leads/components/dialogs/LeadDialogsProvider";
 import { ROLE_LABELS } from "@/features/leads/constants";
+import { NotificationBell } from "@/features/notifications/NotificationBell";
+import { PreferencesDialog } from "@/features/notifications/PreferencesDialog";
 import { useOnboarding } from "@/features/onboarding/OnboardingProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsDarkMode } from "@/hooks/useStageColor";
@@ -19,7 +21,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { useColorScheme } from "@mui/material/styles";
-import { BookOpen, ChevronsLeft, ChevronsRight, LogOut, Moon, Plus, Search, Sun } from "lucide-react";
+import { BookOpen, ChevronsLeft, ChevronsRight, LogOut, Moon, Plus, Search, Settings, Sun } from "lucide-react";
 import { useState } from "react";
 import { NavLink } from "react-router";
 import { LocxLogo } from "./Brand";
@@ -58,6 +60,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, onOpenSearch
 	const { openCreateLead } = useLeadDialogs();
 	const { openGuide } = useOnboarding();
 	const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+	const [prefsOpen, setPrefsOpen] = useState(false);
 	const { data } = useGetDashboardQuery({ days: 30 }, { pollingInterval: 120_000 });
 	const agendaAlerts = (data?.data.myAgenda.overdue ?? 0) + (data?.data.myAgenda.today ?? 0);
 	const trialsEnding = data?.data.trialsEnding.length ?? 0;
@@ -218,6 +221,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, onOpenSearch
 						</Box>
 					</WithTooltip>
 				)}
+				<NotificationBell collapsed={collapsed} itemClass={itemClass} />
 				<WithTooltip collapsed={collapsed} title="Guia de uso">
 					<Box
 						component="button"
@@ -281,6 +285,19 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, onOpenSearch
 						</Typography>
 					</div>
 					<Divider />
+					<MenuItem
+						onClick={() => {
+							setMenuAnchor(null);
+							setPrefsOpen(true);
+						}}
+						dense
+						data-cy="open-preferences"
+					>
+						<ListItemIcon>
+							<Settings size={18} strokeWidth={1.5} />
+						</ListItemIcon>
+						Preferências
+					</MenuItem>
 					<MenuItem onClick={handleLogout} dense data-cy="logout">
 						<ListItemIcon>
 							<LogOut size={18} strokeWidth={1.5} />
@@ -288,6 +305,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, onOpenSearch
 						Sair
 					</MenuItem>
 				</Menu>
+				<PreferencesDialog open={prefsOpen} onClose={() => setPrefsOpen(false)} />
 			</div>
 		</Box>
 	);

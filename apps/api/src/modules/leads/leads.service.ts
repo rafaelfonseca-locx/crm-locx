@@ -1,6 +1,7 @@
 import type { LeadStage, LeadStatus, Prisma } from "@prisma/client";
 import { HttpError, notFound } from "../../lib/http.js";
 import { prisma } from "../../lib/prisma.js";
+import { syncLeadToRdSafely } from "../integrations/rdstation.api.js";
 
 export const STAGE_LABELS: Record<LeadStage, string> = {
 	NEW: "Novo lead",
@@ -47,7 +48,7 @@ async function recordTransition(
 }
 
 export async function moveStage(leadId: number, stage: LeadStage, userId: string | null) {
-	return prisma.$transaction(async (tx) => {
+	const result = await prisma.$transaction(async (tx) => {
 		const lead = await getLeadOrFail(tx, leadId);
 		if (lead.status !== "OPEN") throw new HttpError(400, "Reabra o lead antes de mudar a etapa");
 		if (lead.stage === stage) return lead;
@@ -60,6 +61,8 @@ export async function moveStage(leadId: number, stage: LeadStage, userId: string
 		);
 		return tx.lead.update({ where: { id: leadId }, data: { stage, stageChangedAt: new Date() } });
 	});
+	syncLeadToRdSafely(leadId);
+	return result;
 }
 
 export async function markAsWon(
@@ -72,7 +75,7 @@ export async function markAsWon(
 	},
 	userId: string,
 ) {
-	return prisma.$transaction(async (tx) => {
+	const result = await prisma.$transaction(async (tx) => {
 		const lead = await getLeadOrFail(tx, leadId);
 		if (lead.status === "WON") throw new HttpError(400, "Este lead já está marcado como ganho");
 		await recordTransition(tx, lead, { stage: "CLOSING", status: "WON" }, userId, "Venda ganha 🎉");
@@ -97,10 +100,12 @@ export async function markAsWon(
 			},
 		});
 	});
+	syncLeadToRdSafely(leadId);
+	return result;
 }
 
 export async function markAsLost(leadId: number, data: { reason: string; note?: string | null }, userId: string) {
-	return prisma.$transaction(async (tx) => {
+	const result = await prisma.$transaction(async (tx) => {
 		const lead = await getLeadOrFail(tx, leadId);
 		if (lead.status === "LOST") throw new HttpError(400, "Este lead já está marcado como perdido");
 		await recordTransition(
@@ -119,10 +124,12 @@ export async function markAsLost(leadId: number, data: { reason: string; note?: 
 			data: { status: "LOST", lostAt: new Date(), wonAt: null, lostReason: data.reason },
 		});
 	});
+	syncLeadToRdSafely(leadId);
+	return result;
 }
 
 export async function reopen(leadId: number, userId: string) {
-	return prisma.$transaction(async (tx) => {
+	const result = await prisma.$transaction(async (tx) => {
 		const lead = await getLeadOrFail(tx, leadId);
 		if (lead.status === "OPEN") throw new HttpError(400, "Este lead já está em aberto");
 		await recordTransition(tx, lead, { stage: lead.stage, status: "OPEN" }, userId, "Lead reaberto");
@@ -131,4 +138,6 @@ export async function reopen(leadId: number, userId: string) {
 			data: { status: "OPEN", wonAt: null, lostAt: null, lostReason: null, stageChangedAt: new Date() },
 		});
 	});
+	syncLeadToRdSafely(leadId);
+	return result;
 }

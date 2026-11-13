@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { notifySafely } from "../notifications/notifications.service.js";
 import { ASSIGNMENT_SETTING_KEY, type AssignmentMode, upsertInboundLead } from "./inbound.service.js";
 import { extractRdLeads, normalizeRdLead } from "./rdstation.mapper.js";
 
@@ -18,7 +19,27 @@ export async function getAssignmentMode(): Promise<AssignmentMode> {
 	return mode === "UNASSIGNED" ? "UNASSIGNED" : "ROUND_ROBIN";
 }
 
-type ProcessResult = { status: "PROCESSED" | "UPDATED"; leadId: number; message: string };
+type ProcessResult = { status: "PROCESSED" | "UPDATED" | "IGNORED"; leadId: number | null; message: string };
+
+export const LEAD_CONVERSIONS_KEY = "leadConversions";
+/**
+ * Formulários de venda de holding (RE Patrimonial) no RD. Os de conteúdo (e-books, planilhas, calculadoras)
+ * e os do corporativo não criam lead. WhatsApp (botao-wpp-holding) e demonstração (agendou_demonstracao)
+ * são reconhecidos pelo nome e sempre criam lead.
+ */
+export const DEFAULT_LEAD_CONVERSIONS = ["formulario-lp-re_patrimonial"];
+
+export async function getLeadConversions(): Promise<string[]> {
+	const setting = await prisma.setting.findUnique({ where: { key: LEAD_CONVERSIONS_KEY } });
+	const list = (setting?.value as { identifiers?: string[] } | null)?.identifiers;
+	return Array.isArray(list) ? list : DEFAULT_LEAD_CONVERSIONS;
+}
+
+/** Demonstração e WhatsApp sempre criam lead; o resto só se o formulário estiver na lista. */
+export function isSalesConversion(identifier: string | null, channel: string, allowed: string[]) {
+	if (channel === "DEMO" || channel === "WHATSAPP" || !identifier) return true;
+	return allowed.map((a) => a.trim().toLowerCase()).includes(identifier.trim().toLowerCase());
+}
 
 export async function handleRdWebhook(payload: unknown) {
 	const rawLeads = extractRdLeads(payload);
@@ -34,11 +55,49 @@ export async function handleRdWebhook(payload: unknown) {
 		return [];
 	}
 	const results: (ProcessResult | { status: "ERROR"; message: string })[] = [];
+	const allowed = await getLeadConversions();
 	for (const raw of rawLeads) {
 		try {
 			const lead = normalizeRdLead(raw);
 			if (!lead.email && !lead.phone) throw new Error("Lead sem e-mail e sem telefone");
 			const conversion = lead.conversionIdentifier ? ` (${lead.conversionIdentifier})` : "";
+
+			if (!isSalesConversion(lead.conversionIdentifier, lead.channel, allowed)) {
+				// Fora dos formulários de venda (conteúdo, corporativo): entra no histórico de quem já é lead, mas não cria lead novo
+				const existing = await prisma.lead.findFirst({
+					where: {
+						OR: [
+							...(lead.rdLeadId ? [{ rdLeadId: lead.rdLeadId }] : []),
+							...(lead.email ? [{ email: lead.email }] : []),
+						],
+					},
+					select: { id: true },
+				});
+				if (existing) {
+					await prisma.activity.create({
+						data: { leadId: existing.id, type: "SYSTEM", title: `Conversão no RD Station${conversion}` },
+					});
+				}
+				const ignored: ProcessResult = {
+					status: existing ? "UPDATED" : "IGNORED",
+					leadId: existing?.id ?? null,
+					message: existing
+						? "Conversão fora dos formulários de venda, registrada no histórico do lead"
+						: "Fora dos formulários de venda: não cria lead",
+				};
+				results.push(ignored);
+				await prisma.webhookLog.create({
+					data: {
+						source: "rd-station",
+						status: ignored.status,
+						message: ignored.message,
+						leadId: ignored.leadId,
+						payload: raw as Prisma.InputJsonValue,
+					},
+				});
+				continue;
+			}
+
 			const result = await prisma.$transaction((tx) =>
 				upsertInboundLead(
 					tx,
@@ -56,6 +115,14 @@ export async function handleRdWebhook(payload: unknown) {
 						: "Conversão registrada em lead existente",
 			};
 			results.push(processed);
+			if (result.created && result.ownerId) {
+				notifySafely([result.ownerId], {
+					type: "LEAD_ASSIGNED",
+					title: `Novo lead para você: ${lead.companyName ?? lead.name}`,
+					body: `${CHANNEL_LABELS[lead.channel]}. Faça o primeiro contato em até 1 hora.`,
+					leadId: result.leadId,
+				});
+			}
 			await prisma.webhookLog.create({
 				data: {
 					source: "rd-station",
@@ -78,22 +145,22 @@ export async function handleRdWebhook(payload: unknown) {
 
 const SAMPLES = {
 	DEMO: {
-		identifier: "agendar-demonstracao",
+		identifier: "agendou_demonstracao",
 		custom: {
-			"Qualificação do negócio": "Imobiliária",
+			"Qualificação do negócio": "Holding patrimonial familiar",
 			"Qual seu papel na gestão dos imóveis?": "Sócio ou diretor",
-			"Quantos contratos de aluguel você gerencia hoje?": "201 a 500",
-			"Como você gerencia hoje?": "Outro sistema",
+			"Quantos contratos de aluguel você gerencia hoje?": "26 a 50",
+			"Como você gerencia hoje?": "Sim, outro sistema",
 			"Quando você pretende começar a usar um sistema?": "Em até 30 dias",
 		},
 	},
 	WHATSAPP: {
-		identifier: "formulario-whatsapp",
-		custom: { "Qual o seu perfil?": "Administradora", "Quantidade de imóveis que você gerencia hoje?": "51 a 200" },
+		identifier: "botao-wpp-holding",
+		custom: { "Qual o seu perfil?": "Family office", "Quantidade de imóveis que você gerencia hoje?": "6 a 25" },
 	},
 	SITE: {
-		identifier: "formulario-site",
-		custom: { "Quantos imóveis você gerencia?": "Até 50", "Como você gerencia hoje?": "Planilhas" },
+		identifier: "formulario-lp-re_patrimonial",
+		custom: { "Quantos imóveis você gerencia?": "1 a 5", "Como você gerencia hoje?": "Não, uso planilha" },
 	},
 } as const;
 

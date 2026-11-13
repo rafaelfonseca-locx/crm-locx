@@ -5,6 +5,21 @@ export type CurrentUser = UserSummary & {
 	active: boolean;
 	mustChangePassword: boolean;
 	onboardedAt: string | null;
+	emailOnAssigned: boolean;
+	emailOnCalendar: boolean;
+	emailDailyDigest: boolean;
+	googleAccount: { email: string } | null;
+};
+
+export type AppNotification = {
+	id: string;
+	type: string;
+	title: string;
+	body: string | null;
+	leadId: number | null;
+	link: string | null;
+	readAt: string | null;
+	createdAt: string;
 };
 
 export type TeamMember = UserSummary & {

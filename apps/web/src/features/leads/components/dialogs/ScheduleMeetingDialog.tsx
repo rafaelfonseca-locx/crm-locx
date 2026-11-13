@@ -3,14 +3,21 @@ import { GridForm } from "@/components/layout/Form";
 import { Dialog, DialogActions, DialogContent, DialogTitle } from "@/components/ui/Dialog";
 import { useNotify } from "@/hooks/useNotify";
 import type { Lead } from "@/store/api/@types/lead.types";
-import { useCreateActivityMutation, useGetUsersQuery, useMoveLeadStageMutation } from "@/store/api/hooks";
+import {
+	useCreateActivityMutation,
+	useGetGoogleStatusQuery,
+	useGetUsersQuery,
+	useMoveLeadStageMutation,
+} from "@/store/api/hooks";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Switch from "@mui/material/Switch";
+import Typography from "@mui/material/Typography";
 import { addDays, setHours, setMinutes } from "date-fns";
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod/v3";
 
 const FORM_ID = "meeting-form";
@@ -24,6 +31,8 @@ const schema = z.object({
 	assigneeId: z.string().nullish(),
 	body: z.string().trim().max(5000).nullish(),
 	moveToMeetingStage: z.boolean(),
+	durationMin: z.coerce.number().int(),
+	syncGoogle: z.boolean(),
 });
 type Schema = z.infer<typeof schema>;
 
@@ -34,6 +43,8 @@ const nextBusinessSlot = () => setMinutes(setHours(addDays(new Date(), 1), 10), 
 export function ScheduleMeetingDialog({ open, lead, fromStageChange, onClose }: Props) {
 	const notify = useNotify();
 	const { data: users } = useGetUsersQuery();
+	const { data: google } = useGetGoogleStatusQuery(undefined, { skip: !open });
+	const googleAvailable = !!google?.data.configured;
 	const [createActivity, { isLoading }] = useCreateActivityMutation();
 	const [moveStage, { isLoading: isMoving }] = useMoveLeadStageMutation();
 	const isBusy = isLoading || isMoving;
@@ -45,6 +56,7 @@ export function ScheduleMeetingDialog({ open, lead, fromStageChange, onClose }: 
 		reset,
 		formState: { errors },
 	} = useForm<Schema>({ resolver: zodResolver(schema) });
+	const syncGoogle = useWatch({ control, name: "syncGoogle" });
 
 	useEffect(() => {
 		if (open && lead) {
@@ -55,6 +67,8 @@ export function ScheduleMeetingDialog({ open, lead, fromStageChange, onClose }: 
 				assigneeId: lead.ownerId,
 				body: null,
 				moveToMeetingStage: canMove,
+				durationMin: 45,
+				syncGoogle: true,
 			});
 		}
 	}, [open, lead, reset, canMove]);
@@ -62,8 +76,16 @@ export function ScheduleMeetingDialog({ open, lead, fromStageChange, onClose }: 
 	const handleSave = async (values: Schema) => {
 		if (!lead) return;
 		try {
-			await createActivity({ leadId: lead.id, type: "MEETING", ...values }).unwrap();
-			notify.success("Reunião agendada com sucesso");
+			const { syncGoogle: useGoogle, ...rest } = values;
+			const result = await createActivity({
+				leadId: lead.id,
+				type: "MEETING",
+				...rest,
+				syncGoogle: googleAvailable && useGoogle,
+			}).unwrap();
+			if (result.data.googleWarning) notify.info(result.data.googleWarning);
+			else if (result.data.googleEventId) notify.success("Reunião agendada no Google Agenda, com convite para o lead");
+			else notify.success("Reunião agendada com sucesso");
 			onClose();
 		} catch (error) {
 			notify.apiError(error);
@@ -120,14 +142,49 @@ export function ScheduleMeetingDialog({ open, lead, fromStageChange, onClose }: 
 							options={(users?.data ?? []).map((u) => ({ label: u.name, value: u.id }))}
 							disabled={isBusy}
 						/>
-						<RHFTextField
-							className="col-span-12"
+						<RHFSelect
+							className="col-span-12 md:col-span-4"
 							control={control}
-							name="meetingUrl"
-							label="Link da reunião"
-							placeholder="https://meet.google.com/..."
+							name="durationMin"
+							label="Duração"
+							emptyLabel={false}
+							options={[30, 45, 60, 90].map((m) => ({ label: `${m} minutos`, value: String(m) }))}
 							disabled={isBusy}
 						/>
+						{googleAvailable && (
+							<Controller
+								control={control}
+								name="syncGoogle"
+								render={({ field }) => (
+									// biome-ignore lint/a11y/noLabelWithoutControl: o Switch dentro do label é o controle
+									<label className="col-span-12 md:col-span-8 flex items-center justify-between gap-3 rounded-lg border px-3 py-1.5 cursor-pointer">
+										<div>
+											<Typography variant="body2" fontWeight={600}>
+												Criar no Google Agenda
+											</Typography>
+											<Typography variant="caption" color="text.secondary">
+												Gera o link do Meet e convida o lead. Precisa do Google conectado por quem conduz.
+											</Typography>
+										</div>
+										<Switch
+											checked={!!field.value}
+											onChange={(e) => field.onChange(e.target.checked)}
+											disabled={isBusy}
+										/>
+									</label>
+								)}
+							/>
+						)}
+						{!(googleAvailable && syncGoogle) && (
+							<RHFTextField
+								className="col-span-12"
+								control={control}
+								name="meetingUrl"
+								label="Link da reunião"
+								placeholder="https://meet.google.com/..."
+								disabled={isBusy}
+							/>
+						)}
 						<RHFTextField
 							className="col-span-12"
 							control={control}

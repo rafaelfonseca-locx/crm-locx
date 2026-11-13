@@ -12,6 +12,11 @@ export type Activity = {
 	dueAt: string | null;
 	completedAt: string | null;
 	meetingUrl: string | null;
+	meetingCode: string | null;
+	googleEventId: string | null;
+	durationMin: number | null;
+	transcript: string | null;
+	aiSummary: string | null;
 	metadata: Record<string, unknown> | null;
 	author: UserSummary | null;
 	assignee: UserSummary | null;
@@ -28,6 +33,8 @@ export type ActivityPayload = {
 	assigneeId?: string | null;
 	completed?: boolean;
 	moveToMeetingStage?: boolean;
+	durationMin?: number;
+	syncGoogle?: boolean;
 };
 
 export type AgendaParams = {

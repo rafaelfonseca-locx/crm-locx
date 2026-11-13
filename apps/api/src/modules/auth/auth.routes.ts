@@ -18,6 +18,10 @@ const publicUserSelect = {
 	active: true,
 	mustChangePassword: true,
 	onboardedAt: true,
+	emailOnAssigned: true,
+	emailOnCalendar: true,
+	emailDailyDigest: true,
+	googleAccount: { select: { email: true } },
 } as const;
 
 authRouter.post("/login", async (req, res) => {
@@ -54,6 +58,9 @@ authRouter.patch("/me", requireAuth, async (req, res) => {
 				currentPassword: z.string().optional(),
 				newPassword: z.string().min(8, "A nova senha deve ter pelo menos 8 caracteres").optional(),
 				onboarded: z.boolean().optional(),
+				emailOnAssigned: z.boolean().optional(),
+				emailOnCalendar: z.boolean().optional(),
+				emailDailyDigest: z.boolean().optional(),
 			})
 			.refine((v) => !v.newPassword || v.currentPassword, {
 				message: "Informe a senha atual",
@@ -67,7 +74,13 @@ authRouter.patch("/me", requireAuth, async (req, res) => {
 		passwordHash?: string;
 		mustChangePassword?: boolean;
 		onboardedAt?: Date | null;
+		emailOnAssigned?: boolean;
+		emailOnCalendar?: boolean;
+		emailDailyDigest?: boolean;
 	} = {
+		emailOnAssigned: body.emailOnAssigned,
+		emailOnCalendar: body.emailOnCalendar,
+		emailDailyDigest: body.emailDailyDigest,
 		name: body.name,
 		color: body.color,
 		...(body.onboarded === undefined ? {} : { onboardedAt: body.onboarded ? new Date() : null }),

@@ -8,8 +8,10 @@ import { requireAuth } from "./middlewares/auth.js";
 import { activitiesRouter } from "./modules/activities/activities.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { googlePublicRouter, googleRouter } from "./modules/google/google.routes.js";
 import { integrationsRouter, rdWebhookRouter } from "./modules/integrations/integrations.routes.js";
 import { leadsRouter } from "./modules/leads/leads.routes.js";
+import { notificationsRouter } from "./modules/notifications/notifications.routes.js";
 import { trialsRouter } from "./modules/trials/trials.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 
@@ -32,6 +34,8 @@ export function createApp() {
 
 	app.get("/api/health", (_req, res) => ok(res, { status: "ok" }));
 	app.use("/api/auth", authRouter);
+	app.use("/api/integrations/google", googlePublicRouter);
+	app.use("/api/integrations/google", googleRouter);
 	app.use("/api/integrations", rdWebhookRouter);
 	app.use("/api/integrations", integrationsRouter);
 
@@ -40,6 +44,7 @@ export function createApp() {
 	protectedApi.use("/leads", leadsRouter);
 	protectedApi.use("/users", usersRouter);
 	protectedApi.use("/dashboard", dashboardRouter);
+	protectedApi.use("/notifications", notificationsRouter);
 	protectedApi.use(activitiesRouter);
 	protectedApi.use(trialsRouter);
 	app.use("/api", protectedApi);

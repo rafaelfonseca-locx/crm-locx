@@ -1,0 +1,30 @@
+import type { ApiResponse } from "../@types/common.types";
+import type { Dashboard, RdIntegration } from "../@types/dashboard.types";
+import { apiService } from "../apiService";
+
+export const dashboardApi = apiService.injectEndpoints({
+	endpoints: (build) => ({
+		getDashboard: build.query<ApiResponse<Dashboard>, { days: number; ownerId?: string }>({
+			query: ({ days, ownerId }) => ({ url: "/dashboard", params: { days, ...(ownerId ? { ownerId } : {}) } }),
+			providesTags: ["Dashboard"],
+		}),
+		getRdIntegration: build.query<ApiResponse<RdIntegration>, void>({
+			query: () => "/integrations/rd-station",
+			providesTags: ["Integration"],
+		}),
+		updateAssignmentMode: build.mutation<ApiResponse<{ mode: string }>, { mode: RdIntegration["assignmentMode"] }>({
+			query: (body) => ({ url: "/integrations/settings/assignment", method: "PUT", body }),
+			invalidatesTags: ["Integration"],
+		}),
+		sendRdTestLead: build.mutation<ApiResponse<unknown[]>, void>({
+			query: () => ({ url: "/integrations/rd-station/test", method: "POST" }),
+			invalidatesTags: [
+				"Integration",
+				{ type: "Lead", id: "LIST" },
+				"Dashboard",
+				{ type: "Activity", id: "AGENDA" },
+				"User",
+			],
+		}),
+	}),
+});

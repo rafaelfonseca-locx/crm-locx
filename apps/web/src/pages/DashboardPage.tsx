@@ -1,0 +1,493 @@
+import { LoadingContent } from "@/components/feedback/LoadingContent";
+import { PageActions, PageHeader, PageSimple, PageTitle } from "@/components/layout/Page";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { HorizontalBars, KpiTile, Panel, useSeriesColor } from "@/features/dashboard/components";
+import { STAGE_META } from "@/features/leads/constants";
+import { trialDaysLeftLabel } from "@/features/trials/trialProgress";
+import { useAuth } from "@/hooks/useAuth";
+import { usePersistentState } from "@/hooks/usePersistentState";
+import { useStageColor } from "@/hooks/useStageColor";
+import type { Dashboard } from "@/store/api/@types/dashboard.types";
+import { useGetDashboardQuery, useGetUsersQuery } from "@/store/api/hooks";
+import { formatCompactCurrency, formatCurrency, formatPercent } from "@/utils/formatters";
+import Box from "@mui/material/Box";
+import ButtonBase from "@mui/material/ButtonBase";
+import LinearProgress from "@mui/material/LinearProgress";
+import MenuItem from "@mui/material/MenuItem";
+import Paper from "@mui/material/Paper";
+import TextField from "@mui/material/TextField";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import Typography from "@mui/material/Typography";
+import { BarChart } from "@mui/x-charts/BarChart";
+import { format } from "date-fns";
+import { differenceInCalendarDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+	AlarmClock,
+	CalendarCheck,
+	CalendarClock,
+	CircleDollarSign,
+	FlaskConical,
+	Gauge,
+	Hourglass,
+	Inbox,
+	Percent,
+	Trophy,
+} from "lucide-react";
+import { Link, useNavigate } from "react-router";
+
+const PERIODS = [
+	{ value: 7, label: "7 dias" },
+	{ value: 30, label: "30 dias" },
+	{ value: 90, label: "90 dias" },
+];
+
+function TodayStrip({ data }: { data: Dashboard }) {
+	const items = [
+		{
+			to: "/agenda",
+			label: "Atividades atrasadas",
+			value: data.myAgenda.overdue,
+			icon: AlarmClock,
+			tone: data.myAgenda.overdue > 0 ? "error.main" : "text.secondary",
+		},
+		{ to: "/agenda", label: "Para hoje", value: data.myAgenda.today, icon: CalendarClock, tone: "text.primary" },
+		{
+			to: "/trials",
+			label: "Trials terminando em até 2 dias",
+			value: data.trialsEnding.length,
+			icon: FlaskConical,
+			tone: data.trialsEnding.length > 0 ? "warning.main" : "text.secondary",
+		},
+	];
+	return (
+		<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+			{items.map(({ to, label, value, icon: Icon, tone }) => (
+				<ButtonBase key={label} component={Link} to={to} className="!justify-start !rounded-xl">
+					<Paper
+						className="w-full rounded-xl px-4 py-3 flex items-center gap-3"
+						sx={{ border: 1, borderColor: "divider", "&:hover": { borderColor: "text.disabled" } }}
+					>
+						<Box
+							className="flex items-center justify-center w-9 h-9 rounded-lg"
+							sx={{ bgcolor: "action.hover", color: tone }}
+						>
+							<Icon size={18} strokeWidth={1.5} />
+						</Box>
+						<div className="text-left">
+							<Typography className="text-xl font-bold tabular-nums leading-none" sx={{ color: tone }}>
+								{value}
+							</Typography>
+							<Typography variant="caption" color="text.secondary">
+								{label}
+							</Typography>
+						</div>
+					</Paper>
+				</ButtonBase>
+			))}
+		</div>
+	);
+}
+
+function FunnelPanel({ data }: { data: Dashboard }) {
+	const labelFor = (stage: string) =>
+		stage === "WON" ? "Venda ganha" : STAGE_META[stage as keyof typeof STAGE_META].label;
+	const first = data.funnel[0]?.count ?? 0;
+	return (
+		<Panel
+			title="Funil de conversão"
+			subtitle={`Leads que entraram nos últimos ${data.period.days} dias e até onde chegaram`}
+		>
+			{first === 0 ? (
+				<EmptyState compact title="Nenhum lead no período" />
+			) : (
+				<HorizontalBars
+					labelWidth={120}
+					rows={data.funnel.map((step, i) => {
+						const prev = i > 0 ? data.funnel[i - 1].count : null;
+						const rate = prev ? step.count / prev : null;
+						return {
+							key: step.stage,
+							label: labelFor(step.stage),
+							value: step.count,
+							display: String(step.count),
+							tooltip: `${labelFor(step.stage)}: ${step.count} leads (${formatPercent(step.count / first)} do total)`,
+							aside:
+								rate !== null ? (
+									<Typography
+										variant="caption"
+										color="text.secondary"
+										className="tabular-nums"
+										title="Conversão a partir da etapa anterior"
+									>
+										{formatPercent(rate)}
+									</Typography>
+								) : (
+									<Typography variant="caption" color="text.disabled">
+										—
+									</Typography>
+								),
+						};
+					})}
+				/>
+			)}
+		</Panel>
+	);
+}
+
+function PipelinePanel({ data }: { data: Dashboard }) {
+	const stageColor = useStageColor();
+	const total = data.pipeline.reduce((a, s) => a + s.count, 0) || 1;
+	return (
+		<Panel
+			title="Pipeline atual"
+			subtitle={`${data.kpis.openLeads} leads em aberto · ${formatCurrency(data.kpis.pipelineValue)}/mês estimado`}
+			action={
+				<Typography
+					component={Link}
+					to="/pipeline"
+					variant="caption"
+					fontWeight={600}
+					sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}
+				>
+					Abrir pipeline
+				</Typography>
+			}
+		>
+			<div
+				className="flex h-3 rounded-full overflow-hidden gap-[2px]"
+				role="img"
+				aria-label="Distribuição dos leads por etapa"
+			>
+				{data.pipeline.map((s) => (
+					<Box key={s.stage} sx={{ width: `${(s.count / total) * 100}%`, bgcolor: stageColor(s.stage) }} />
+				))}
+			</div>
+			<ul className="divide-y">
+				{data.pipeline.map((s) => (
+					<li key={s.stage} className="flex items-center gap-3 py-2">
+						<Box className="w-2.5 h-2.5 rounded-full shrink-0" sx={{ bgcolor: stageColor(s.stage) }} />
+						<Typography variant="body2" className="flex-1">
+							{STAGE_META[s.stage].label}
+						</Typography>
+						<Typography variant="body2" fontWeight={600} className="tabular-nums w-10 text-right">
+							{s.count}
+						</Typography>
+						<Typography variant="caption" color="text.secondary" className="tabular-nums w-20 text-right">
+							{s.value > 0 ? formatCompactCurrency(s.value) : "—"}
+						</Typography>
+					</li>
+				))}
+			</ul>
+		</Panel>
+	);
+}
+
+function LeadsPerDayPanel({ data }: { data: Dashboard }) {
+	const color = useSeriesColor();
+	const series = data.leadsPerDay;
+	return (
+		<Panel title="Leads recebidos por dia" subtitle={`${data.kpis.newLeads} no período`}>
+			<div className="h-[220px] -mx-2">
+				<BarChart
+					dataset={series}
+					xAxis={[
+						{
+							scaleType: "band",
+							dataKey: "date",
+							valueFormatter: (v: string, ctx) =>
+								format(new Date(`${v}T12:00:00`), ctx.location === "tooltip" ? "EEEE, dd/MM" : "dd/MM", {
+									locale: ptBR,
+								}),
+							tickLabelInterval: (_v, i) => i % Math.ceil(series.length / 8) === 0,
+							disableTicks: true,
+						},
+					]}
+					yAxis={[{ tickMinStep: 1, disableTicks: true }]}
+					series={[{ dataKey: "count", label: "Leads", color, valueFormatter: (v) => `${v ?? 0} leads` }]}
+					borderRadius={4}
+					grid={{ horizontal: true }}
+					slotProps={{ legend: { hidden: true } }}
+					margin={{ top: 10, right: 10, bottom: 28, left: 32 }}
+					sx={{
+						"& .MuiChartsGrid-line": { strokeDasharray: "3 3", opacity: 0.5 },
+						"& .MuiChartsAxis-line": { display: "none" },
+					}}
+				/>
+			</div>
+		</Panel>
+	);
+}
+
+function SourcesPanel({ data }: { data: Dashboard }) {
+	return (
+		<Panel title="Origem dos leads" subtitle="Leads do período e quantos viraram venda">
+			{data.sources.length === 0 ? (
+				<EmptyState compact />
+			) : (
+				<HorizontalBars
+					labelWidth={110}
+					rows={data.sources.slice(0, 6).map((s) => ({
+						key: s.source,
+						label: s.source,
+						value: s.count,
+						display: String(s.count),
+						tooltip: `${s.source}: ${s.count} leads, ${s.won} vendas`,
+						aside: (
+							<Typography variant="caption" color="text.secondary" className="tabular-nums">
+								{s.won} {s.won === 1 ? "venda" : "vendas"}
+							</Typography>
+						),
+					}))}
+				/>
+			)}
+		</Panel>
+	);
+}
+
+function TeamPanel({ data }: { data: Dashboard }) {
+	return (
+		<Panel title="Desempenho do time" subtitle={`Vendas nos últimos ${data.period.days} dias e carteira atual`}>
+			<div className="overflow-x-auto">
+				<table className="w-full text-[13px]">
+					<thead>
+						<tr className="text-left border-b">
+							{["Comercial", "Em aberto", "Reuniões", "Trials", "Vendas", "Receita nova"].map((h, i) => (
+								<Typography
+									key={h}
+									component="th"
+									variant="caption"
+									color="text.secondary"
+									fontWeight={600}
+									className={`py-2 ${i > 0 ? "text-right px-2" : ""}`}
+								>
+									{h}
+								</Typography>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{data.team.map((row) => (
+							<tr key={row.user.id} className="border-b last:border-b-0">
+								<td className="py-2.5">
+									<div className="flex items-center gap-2">
+										<UserAvatar user={row.user} size={26} tooltip={false} />
+										<span className="font-medium truncate">{row.user.name}</span>
+									</div>
+								</td>
+								<td className="text-right px-2 tabular-nums">{row.openLeads}</td>
+								<td className="text-right px-2 tabular-nums">{row.meetings}</td>
+								<td className="text-right px-2 tabular-nums">{row.activeTrials}</td>
+								<td className="text-right px-2 tabular-nums font-semibold">{row.won}</td>
+								<td className="text-right px-2 tabular-nums font-semibold">{formatCurrency(row.wonValue)}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function TrialsEndingPanel({ data }: { data: Dashboard }) {
+	const navigate = useNavigate();
+	return (
+		<Panel title="Trials terminando" subtitle="Ativos com prazo em até 2 dias ou vencidos">
+			{data.trialsEnding.length === 0 ? (
+				<EmptyState compact icon={<FlaskConical size={28} strokeWidth={1.5} />} title="Nenhum trial perto do fim" />
+			) : (
+				<ul className="space-y-1">
+					{data.trialsEnding.map((t) => {
+						const daysLeft = differenceInCalendarDays(new Date(t.endDate), new Date());
+						return (
+							<li key={t.id}>
+								<ButtonBase
+									onClick={() => navigate(`/leads/${t.lead.id}?aba=trial`)}
+									className="w-full !justify-start !rounded-lg px-2 py-2 gap-3 hover:bg-[var(--mui-palette-action-hover)]"
+								>
+									<UserAvatar user={t.lead.owner} size={26} />
+									<div className="flex-1 min-w-0 text-left">
+										<Typography variant="body2" fontWeight={600} noWrap>
+											{t.lead.companyName ?? t.lead.name}
+										</Typography>
+										<Typography variant="caption" color="text.secondary">
+											Checklist {t.checklistDone}/{t.checklistTotal}
+										</Typography>
+									</div>
+									<Typography variant="caption" fontWeight={600} color={daysLeft < 0 ? "error.main" : "warning.main"}>
+										{trialDaysLeftLabel(daysLeft)}
+									</Typography>
+								</ButtonBase>
+							</li>
+						);
+					})}
+				</ul>
+			)}
+		</Panel>
+	);
+}
+
+function LostReasonsPanel({ data }: { data: Dashboard }) {
+	const total = data.lostReasons.reduce((a, r) => a + r.count, 0);
+	return (
+		<Panel title="Motivos de perda" subtitle={`${total} ${total === 1 ? "lead perdido" : "leads perdidos"} no período`}>
+			{total === 0 ? (
+				<EmptyState compact title="Nenhuma perda no período" />
+			) : (
+				<ul className="space-y-2.5">
+					{data.lostReasons.map((r) => (
+						<li key={r.reason} className="space-y-1">
+							<div className="flex justify-between">
+								<Typography variant="body2">{r.reason}</Typography>
+								<Typography variant="body2" fontWeight={600} className="tabular-nums">
+									{r.count}
+								</Typography>
+							</div>
+							<LinearProgress
+								variant="determinate"
+								value={(r.count / total) * 100}
+								color="inherit"
+								sx={{ color: "text.disabled" }}
+								aria-label={`${r.reason}: ${r.count}`}
+							/>
+						</li>
+					))}
+				</ul>
+			)}
+		</Panel>
+	);
+}
+
+export function DashboardPage() {
+	const { user, isManager } = useAuth();
+	const [prefs, setPrefs] = usePersistentState("dashboardPrefs", { days: 30, ownerId: "" });
+	const { data: users } = useGetUsersQuery();
+	const { data, isLoading, isFetching } = useGetDashboardQuery({
+		days: prefs.days,
+		ownerId: prefs.ownerId || undefined,
+	});
+	const dashboard = data?.data;
+	const k = dashboard?.kpis;
+	const delta = k && k.newLeadsPrev > 0 ? (k.newLeads - k.newLeadsPrev) / k.newLeadsPrev : null;
+
+	return (
+		<PageSimple
+			header={
+				<PageHeader>
+					<PageTitle
+						title={`Olá, ${user?.name.split(" ")[0] ?? ""}`}
+						icon={<Gauge strokeWidth={1.5} size={16} />}
+						subInfo={format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+					/>
+					<PageActions>
+						<TextField
+							select
+							size="small"
+							value={prefs.ownerId}
+							onChange={(e) => setPrefs({ ...prefs, ownerId: e.target.value })}
+							sx={{ width: 190 }}
+							fullWidth={false}
+							aria-label="Filtrar por comercial"
+							slotProps={{ select: { displayEmpty: true } }}
+						>
+							<MenuItem value="">{isManager ? "Equipe toda" : "Toda a equipe"}</MenuItem>
+							{(users?.data ?? []).map((u) => (
+								<MenuItem key={u.id} value={u.id}>
+									{u.name}
+								</MenuItem>
+							))}
+						</TextField>
+						<ToggleButtonGroup
+							exclusive
+							size="small"
+							value={prefs.days}
+							onChange={(_, v) => v && setPrefs({ ...prefs, days: v })}
+							aria-label="Período"
+							sx={{ "& .MuiToggleButton-root": { height: 36, px: 1.5, textTransform: "none", fontWeight: 600 } }}
+						>
+							{PERIODS.map((p) => (
+								<ToggleButton key={p.value} value={p.value}>
+									{p.label}
+								</ToggleButton>
+							))}
+						</ToggleButtonGroup>
+					</PageActions>
+				</PageHeader>
+			}
+			content={
+				isLoading || !dashboard || !k ? (
+					<LoadingContent />
+				) : (
+					<div className="space-y-4" style={{ opacity: isFetching ? 0.7 : 1, transition: "opacity 150ms" }}>
+						<TodayStrip data={dashboard} />
+						<div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+							<KpiTile
+								label="Novos leads"
+								value={String(k.newLeads)}
+								delta={delta}
+								hint="vs. período anterior"
+								icon={<Inbox size={16} strokeWidth={1.5} />}
+							/>
+							<KpiTile
+								label="Reuniões agendadas"
+								value={String(k.meetings)}
+								icon={<CalendarCheck size={16} strokeWidth={1.5} />}
+							/>
+							<KpiTile
+								label="Trials iniciados"
+								value={String(k.trialsStarted)}
+								hint={`${k.activeTrials} ativos agora`}
+								icon={<FlaskConical size={16} strokeWidth={1.5} />}
+							/>
+							<KpiTile
+								label="Vendas"
+								value={String(k.won)}
+								hint={`${k.lost} perdidos`}
+								icon={<Trophy size={16} strokeWidth={1.5} />}
+							/>
+							<KpiTile
+								label="Receita nova (MRR)"
+								value={formatCurrency(k.wonValue)}
+								icon={<CircleDollarSign size={16} strokeWidth={1.5} />}
+							/>
+							<KpiTile
+								label="Taxa de ganho"
+								value={formatPercent(k.winRate)}
+								hint="ganhos ÷ encerrados"
+								icon={<Percent size={16} strokeWidth={1.5} />}
+							/>
+							<KpiTile
+								label="Ciclo médio de venda"
+								value={k.avgCycleDays === null ? "N/A" : `${Math.round(k.avgCycleDays)} dias`}
+								icon={<Hourglass size={16} strokeWidth={1.5} />}
+							/>
+						</div>
+						<div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+							<div className="lg:col-span-7">
+								<FunnelPanel data={dashboard} />
+							</div>
+							<div className="lg:col-span-5">
+								<PipelinePanel data={dashboard} />
+							</div>
+							<div className="lg:col-span-7">
+								<LeadsPerDayPanel data={dashboard} />
+							</div>
+							<div className="lg:col-span-5">
+								<SourcesPanel data={dashboard} />
+							</div>
+							<div className="lg:col-span-7">
+								<TeamPanel data={dashboard} />
+							</div>
+							<div className="lg:col-span-5 space-y-4">
+								<TrialsEndingPanel data={dashboard} />
+								<LostReasonsPanel data={dashboard} />
+							</div>
+						</div>
+					</div>
+				)
+			}
+		/>
+	);
+}
